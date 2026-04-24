@@ -15,7 +15,7 @@ export default function HomeScreen() {
             <Ionicons name="search" size={20} color="#6b7280" />
             <TextInput placeholder="Tìm kiếm" style={styles.searchInput} />
           </View>
-          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(auth)/login' as any)}>
+          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(settings)' as any)}>
             <Text style={styles.avatarText}>M</Text>
           </TouchableOpacity>
         </View>

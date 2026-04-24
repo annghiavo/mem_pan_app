@@ -39,8 +39,19 @@ export default function LoginScreen() {
       }
 
       if (response.ok) {
-        // Here you would typically save the token (data.accessToken) to SecureStore or similar
-        // and update global auth state
+        // Cập nhật token vào bộ nhớ tạm để gọi các API khác
+        import('../../services/api').then(({ setAuthToken, setRefreshToken }) => {
+          // Token có thể nằm ở data.token, data.accessToken hoặc data.data.token
+          const token = data.token || data.accessToken || (data.data && data.data.accessToken);
+          if (token) {
+            setAuthToken(token);
+          }
+          const rToken = data.refreshToken || (data.data && data.data.refreshToken);
+          if (rToken) {
+            setRefreshToken(rToken);
+          }
+        });
+        
         Alert.alert('Thành công', 'Đăng nhập thành công!');
         router.replace('/(tabs)');
       } else {

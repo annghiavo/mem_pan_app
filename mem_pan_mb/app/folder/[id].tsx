@@ -1,11 +1,49 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { getFolder } from '../../services/api';
 
 export default function FolderDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const [folderData, setFolderData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFolder = async () => {
+      try {
+        const res = await getFolder(id as string);
+        setFolderData(res.data);
+      } catch (error) {
+        console.error('Error fetching folder:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFolder();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#5865F2" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!folderData || !folderData.folder) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Không tìm thấy thư mục</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={{ color: '#5865F2' }}>Quay lại</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const { folder, decks } = folderData;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -20,7 +58,7 @@ export default function FolderDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.folderHeader}>
-          <Text style={styles.folderTitle}>A2-3 MARUGOTO VOCABULARY</Text>
+          <Text style={styles.folderTitle}>{folder.name}</Text>
           <View style={styles.authorInfo}>
             <View style={styles.avatar}><Text style={styles.avatarText}>B</Text></View>
             <Text style={styles.authorName}>bạn</Text>
@@ -28,21 +66,25 @@ export default function FolderDetailScreen() {
         </View>
 
         <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>3 Học phần</Text>
+          <Text style={styles.statsText}>{decks?.length || 0} Học phần</Text>
         </View>
 
         {/* Modules in folder */}
-        {[1, 2, 3].map((item) => (
-          <TouchableOpacity key={item} style={styles.moduleCard} onPress={() => router.push(`/module/${item}` as any)}>
+        {decks && decks.length > 0 ? decks.map((item: any) => (
+          <TouchableOpacity key={item.deckId} style={styles.moduleCard} onPress={() => router.push(`/module/${item.deckId}` as any)}>
             <View style={styles.moduleContent}>
-              <Text style={styles.moduleTitle}>Bài {item} - Từ vựng</Text>
-              <Text style={styles.moduleSubtitle}>{item * 20 + 15} thuật ngữ • bạn</Text>
+              <Text style={styles.moduleTitle}>{item.name}</Text>
+              <Text style={styles.moduleSubtitle}>{item.cardCount || 0} thuật ngữ • bạn</Text>
             </View>
             <View style={styles.moduleIcon}>
               <Ionicons name="albums-outline" size={24} color="#4b5563" />
             </View>
           </TouchableOpacity>
-        ))}
+        )) : (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: '#6b7280' }}>Chưa có học phần nào trong thư mục này</Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

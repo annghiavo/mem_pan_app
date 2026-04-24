@@ -1,13 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { getDecks, getFolders } from '../../services/api';
 
 export default function LibraryScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Học phần');
+  const [decks, setDecks] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const tabs = ['Học phần', 'Lớp học', 'Thư mục'];
+  const tabs = ['Học phần', 'Thư mục'];
+
+  const fetchData = async () => {
+    try {
+      if (activeTab === 'Học phần') {
+        const res = await getDecks();
+        setDecks(res.decks || []);
+      } else if (activeTab === 'Thư mục') {
+        const res = await getFolders();
+        setFolders(res.folders || []);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchData();
+    }, [activeTab])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,78 +64,71 @@ export default function LibraryScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {activeTab === 'Học phần' && (
-          <>
-            <View style={styles.filterContainer}>
-              <Text style={styles.filterText}>Tất cả</Text>
-              <Ionicons name="chevron-down" size={16} color="#6b7280" />
-            </View>
-            <Text style={styles.dateHeader}>Hôm nay</Text>
-            <TouchableOpacity style={styles.itemCard} onPress={() => router.push('/module/1' as any)}>
-              <View style={styles.itemIconContainer}>
-                <Ionicons name="albums-outline" size={24} color="#0284c7" />
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#5865F2" />
+        </View>
+      ) : (
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {activeTab === 'Học phần' && (
+            <>
+              <View style={styles.filterContainer}>
+                <Text style={styles.filterText}>Tất cả</Text>
+                <Ionicons name="chevron-down" size={16} color="#6b7280" />
               </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle}>TOEIC: Intermediate Personal...</Text>
-                <Text style={styles.itemSubtitle}>Học phần • 69 thuật ngữ • Tác giả: Quizlet</Text>
-              </View>
-            </TouchableOpacity>
+              <Text style={styles.dateHeader}>Gần đây</Text>
+              {decks.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Chưa có học phần nào</Text>
+                </View>
+              ) : (
+                decks.map((deck) => (
+                  <TouchableOpacity key={deck.deckId} style={styles.itemCard} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                    <View style={styles.itemIconContainer}>
+                      <Ionicons name="albums-outline" size={24} color="#0284c7" />
+                    </View>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>{deck.name}</Text>
+                      <Text style={styles.itemSubtitle}>Học phần • {deck.cardCount || 0} thuật ngữ</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </>
+          )}
 
-            <Text style={styles.dateHeader}>tháng 3 năm 2026</Text>
-            <TouchableOpacity style={styles.itemCard} onPress={() => router.push('/module/2' as any)}>
-              <View style={styles.itemIconContainer}>
-                <Ionicons name="albums-outline" size={24} color="#0284c7" />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle}>KANJI MARUGOTO A2-3 TO...</Text>
-                <Text style={styles.itemSubtitle}>Học phần • 544 thuật ngữ • Tác giả: bạn</Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
+          {activeTab === 'Thư mục' && (
+            <>
+              {folders.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Chưa có thư mục nào</Text>
+                </View>
+              ) : (
+                folders.map((folder) => (
+                  <TouchableOpacity key={folder.folderId} style={styles.itemCard} onPress={() => router.push(`/folder/${folder.folderId}` as any)}>
+                    <View style={styles.folderIconContainer}>
+                      <Ionicons name="folder-outline" size={24} color="#4b5563" />
+                    </View>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>{folder.name}</Text>
+                      <Text style={styles.itemSubtitle}>Thư mục</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </>
+          )}
+          
 
-        {activeTab === 'Thư mục' && (
-          <>
-            <TouchableOpacity style={styles.itemCard} onPress={() => router.push('/folder/1' as any)}>
-              <View style={styles.folderIconContainer}>
-                <Ionicons name="folder-outline" size={24} color="#4b5563" />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle}>A2-3 MARUGOTO VOCABUL...</Text>
-                <Text style={styles.itemSubtitle}>Thư mục • Tác giả: bạn</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.itemCard} onPress={() => router.push('/folder/2' as any)}>
-              <View style={styles.folderIconContainer}>
-                <Ionicons name="folder-outline" size={24} color="#4b5563" />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle}>A2-3 MARUGOTO KANJI</Text>
-                <Text style={styles.itemSubtitle}>Thư mục • Tác giả: bạn</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.itemCard} onPress={() => router.push('/folder/3' as any)}>
-              <View style={styles.folderIconContainer}>
-                <Ionicons name="folder-outline" size={24} color="#4b5563" />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle}>N-3</Text>
-                <Text style={styles.itemSubtitle}>Thư mục • Tác giả: bạn</Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-        
-        {/* Lớp học is empty for now */}
-        {activeTab === 'Lớp học' && (
-          <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Text style={{ color: '#6b7280' }}>Chưa có lớp học nào</Text>
-          </View>
-        )}
-        
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -147,6 +174,20 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#f3f4f6',
     borderRadius: 20,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#6b7280',
+    fontSize: 16,
   },
   scrollContent: {
     padding: 16,

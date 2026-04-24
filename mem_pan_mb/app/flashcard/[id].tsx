@@ -1,20 +1,38 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getDeckCards } from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
 
 export default function FlashcardScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const deckId = id as string;
+
+  const [cards, setCards] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
-
   const [currentIndex, setCurrentIndex] = useState(0);
-  const terms = [
-    { term: 'ambitious', definition: 'Describing someone or something that wants to succeed.' },
-    { term: 'creative', definition: 'Relating to or involving the imagination or original ideas.' }
-  ];
+
+  useEffect(() => {
+    const fetchCards = async () => {
+      try {
+        const response = await getDeckCards(deckId);
+        setCards(response.cards || []);
+      } catch (error) {
+        console.error('Error fetching cards:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (deckId) {
+      fetchCards();
+    }
+  }, [deckId]);
 
   const flipCard = () => {
     Animated.timing(flipAnim, {
@@ -38,7 +56,7 @@ export default function FlashcardScreen() {
   const backAnimatedStyle = { transform: [{ rotateY: backInterpolate }] };
 
   const nextCard = () => {
-    if (currentIndex < terms.length - 1) {
+    if (currentIndex < cards.length - 1) {
       if (isFlipped) flipCard();
       setTimeout(() => setCurrentIndex(currentIndex + 1), isFlipped ? 300 : 0);
     }
@@ -51,6 +69,25 @@ export default function FlashcardScreen() {
     }
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#5865F2" />
+      </SafeAreaView>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 18, color: '#4b5563', marginBottom: 16 }}>Không có thẻ nào trong học phần này.</Text>
+        <TouchableOpacity style={{ backgroundColor: '#5865F2', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 }} onPress={() => router.back()}>
+          <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>Quay lại</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -58,14 +95,14 @@ export default function FlashcardScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="close" size={28} color="#1f2937" />
         </TouchableOpacity>
-        <Text style={styles.progressText}>{currentIndex + 1} / {terms.length}</Text>
+        <Text style={styles.progressText}>{currentIndex + 1} / {cards.length}</Text>
         <TouchableOpacity style={styles.iconButton}>
           <Ionicons name="settings-outline" size={24} color="#1f2937" />
         </TouchableOpacity>
       </View>
 
       <View style={styles.progressBarBg}>
-        <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / terms.length) * 100}%` }]} />
+        <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / cards.length) * 100}%` }]} />
       </View>
 
       {/* Card Area */}
@@ -73,11 +110,11 @@ export default function FlashcardScreen() {
         <TouchableOpacity activeOpacity={1} onPress={flipCard} style={styles.cardWrapper}>
           {/* Front */}
           <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle]}>
-            <Text style={styles.cardText}>{terms[currentIndex].term}</Text>
+            <Text style={styles.cardText}>{cards[currentIndex].contentFront}</Text>
           </Animated.View>
           {/* Back */}
           <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle]}>
-            <Text style={styles.cardText}>{terms[currentIndex].definition}</Text>
+            <Text style={styles.cardText}>{cards[currentIndex].contentBack}</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
@@ -90,8 +127,8 @@ export default function FlashcardScreen() {
         <TouchableOpacity style={styles.playButton}>
           <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={nextCard} disabled={currentIndex === terms.length - 1} style={[styles.navButton, currentIndex === terms.length - 1 && styles.navDisabled]}>
-          <Ionicons name="arrow-forward" size={28} color={currentIndex === terms.length - 1 ? "#9ca3af" : "#5865F2"} />
+        <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, currentIndex === cards.length - 1 && styles.navDisabled]}>
+          <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? "#9ca3af" : "#5865F2"} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
