@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,19 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  const theme = {
+    background: isDark ? '#111111' : '#ffffff',
+    text: isDark ? '#f4f4f5' : '#1a1f36',
+    textMuted: isDark ? '#a1a1aa' : '#8a94a6',
+    inputBg: isDark ? '#27272a' : '#f6f7fa',
+    btnDisabled: isDark ? '#3f3f46' : '#f6f7fa',
+    btnDisabledText: isDark ? '#71717a' : '#c2c8d0',
+    primary: '#4255ff'
+  };
 
   const handleLogin = async () => {
     if (!identifier || !password) return;
@@ -40,17 +53,15 @@ export default function LoginScreen() {
 
       if (response.ok) {
         // Cập nhật token vào bộ nhớ tạm để gọi các API khác
-        import('../../services/api').then(({ setAuthToken, setRefreshToken }) => {
-          // Token có thể nằm ở data.token, data.accessToken hoặc data.data.token
-          const token = data.token || data.accessToken || (data.data && data.data.accessToken);
-          if (token) {
-            setAuthToken(token);
-          }
-          const rToken = data.refreshToken || (data.data && data.data.refreshToken);
-          if (rToken) {
-            setRefreshToken(rToken);
-          }
-        });
+        const { setAuthToken, setRefreshToken } = await import('../../services/api');
+        const token = data.token || data.accessToken || (data.data && data.data.accessToken);
+        if (token) {
+          await setAuthToken(token);
+        }
+        const rToken = data.refreshToken || (data.data && data.data.refreshToken);
+        if (rToken) {
+          await setRefreshToken(rToken);
+        }
         
         Alert.alert('Thành công', 'Đăng nhập thành công!');
         router.replace('/(tabs)');
@@ -68,25 +79,25 @@ export default function LoginScreen() {
   const isFormValid = identifier.length > 0 && password.length > 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color="#212529" />
+            <Ionicons name="arrow-back" size={28} color={theme.text} />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>Đăng nhập</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Đăng nhập</Text>
 
         <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.text }]}
               placeholder="Email hoặc tên người dùng"
-              placeholderTextColor="#8a94a6"
+              placeholderTextColor={theme.textMuted}
               value={identifier}
               onChangeText={setIdentifier}
               autoCapitalize="none"
@@ -94,11 +105,11 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.text }]}
               placeholder="Mật khẩu"
-              placeholderTextColor="#8a94a6"
+              placeholderTextColor={theme.textMuted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -110,34 +121,34 @@ export default function LoginScreen() {
               <Ionicons
                 name={showPassword ? "eye-outline" : "eye-off-outline"}
                 size={22}
-                color="#8a94a6"
+                color={theme.textMuted}
               />
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={[styles.loginButton, !isFormValid && styles.loginButtonDisabled]}
+            style={[styles.loginButton, !isFormValid && { backgroundColor: theme.btnDisabled }]}
             onPress={handleLogin}
             disabled={!isFormValid || loading}
           >
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={[styles.loginButtonText, !isFormValid && styles.loginButtonTextDisabled]}>
+              <Text style={[styles.loginButtonText, !isFormValid && { color: theme.btnDisabledText }]}>
                 Đăng nhập
               </Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.forgotPasswordButton}>
-            <Text style={styles.forgotPasswordText}>Quên mật khẩu</Text>
+            <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>Quên mật khẩu</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.registerLinkButton}
             onPress={() => router.push('/(auth)/register' as any)}
           >
-            <Text style={styles.registerLinkText}>Chưa có tài khoản? Đăng ký ngay</Text>
+            <Text style={[styles.registerLinkText, { color: theme.text }]}>Chưa có tài khoản? Đăng ký ngay</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -148,7 +159,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
   },
   keyboardView: {
     flex: 1,
@@ -165,14 +175,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1f36',
     marginBottom: 32,
   },
   formContainer: {
     gap: 16,
   },
   inputContainer: {
-    backgroundColor: '#f6f7fa',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,7 +190,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#1a1f36',
     fontWeight: '500',
   },
   eyeIcon: {
@@ -196,23 +203,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  loginButtonDisabled: {
-    backgroundColor: '#f6f7fa',
-  },
   loginButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  loginButtonTextDisabled: {
-    color: '#c2c8d0',
   },
   forgotPasswordButton: {
     alignItems: 'center',
     marginTop: 16,
   },
   forgotPasswordText: {
-    color: '#4255ff',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -221,7 +221,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   registerLinkText: {
-    color: '#1a1f36',
     fontSize: 16,
     fontWeight: '500',
   },

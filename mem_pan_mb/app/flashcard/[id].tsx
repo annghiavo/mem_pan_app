@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeckCards } from '../../services/api';
@@ -10,6 +10,22 @@ export default function FlashcardScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const deckId = id as string;
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  const theme = {
+    background: isDark ? '#111111' : '#f8f9fa',
+    surface: isDark ? '#1c1c1e' : '#ffffff',
+    text: isDark ? '#f4f4f5' : '#374151',
+    textMuted: isDark ? '#a1a1aa' : '#4b5563',
+    iconColor: isDark ? '#f4f4f5' : '#1f2937',
+    cardText: isDark ? '#f4f4f5' : '#1f2937',
+    navBg: isDark ? '#312e81' : '#e0e7ff',
+    navDisabled: isDark ? '#27272a' : '#f3f4f6',
+    navDisabledIcon: isDark ? '#52525b' : '#9ca3af',
+    primary: '#5865F2',
+  };
 
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,17 +87,17 @@ export default function FlashcardScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#5865F2" />
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
   }
 
   if (cards.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 18, color: '#4b5563', marginBottom: 16 }}>Không có thẻ nào trong học phần này.</Text>
-        <TouchableOpacity style={{ backgroundColor: '#5865F2', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 }} onPress={() => router.back()}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16 }}>Không có thẻ nào trong học phần này.</Text>
+        <TouchableOpacity style={{ backgroundColor: theme.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 }} onPress={() => router.back()}>
           <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>Quay lại</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -89,19 +105,19 @@ export default function FlashcardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="close" size={28} color="#1f2937" />
+          <Ionicons name="close" size={28} color={theme.iconColor} />
         </TouchableOpacity>
-        <Text style={styles.progressText}>{currentIndex + 1} / {cards.length}</Text>
+        <Text style={[styles.progressText, { color: theme.text }]}>{currentIndex + 1} / {cards.length}</Text>
         <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="settings-outline" size={24} color="#1f2937" />
+          <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.progressBarBg}>
+      <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
         <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / cards.length) * 100}%` }]} />
       </View>
 
@@ -109,26 +125,26 @@ export default function FlashcardScreen() {
       <View style={styles.cardContainer}>
         <TouchableOpacity activeOpacity={1} onPress={flipCard} style={styles.cardWrapper}>
           {/* Front */}
-          <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle]}>
-            <Text style={styles.cardText}>{cards[currentIndex].contentFront}</Text>
+          <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+            <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentFront}</Text>
           </Animated.View>
           {/* Back */}
-          <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle]}>
-            <Text style={styles.cardText}>{cards[currentIndex].contentBack}</Text>
+          <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+            <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentBack}</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
 
       {/* Controls */}
       <View style={styles.controls}>
-        <TouchableOpacity onPress={prevCard} disabled={currentIndex === 0} style={[styles.navButton, currentIndex === 0 && styles.navDisabled]}>
-          <Ionicons name="arrow-back" size={28} color={currentIndex === 0 ? "#9ca3af" : "#5865F2"} />
+        <TouchableOpacity onPress={prevCard} disabled={currentIndex === 0} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === 0 && { backgroundColor: theme.navDisabled }]}>
+          <Ionicons name="arrow-back" size={28} color={currentIndex === 0 ? theme.navDisabledIcon : theme.primary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.playButton}>
           <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, currentIndex === cards.length - 1 && styles.navDisabled]}>
-          <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? "#9ca3af" : "#5865F2"} />
+        <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === cards.length - 1 && { backgroundColor: theme.navDisabled }]}>
+          <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? theme.navDisabledIcon : theme.primary} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -136,20 +152,19 @@ export default function FlashcardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   iconButton: { padding: 8 },
-  progressText: { fontSize: 16, fontWeight: 'bold', color: '#374151' },
-  progressBarBg: { height: 4, backgroundColor: '#e5e7eb', width: '100%' },
+  progressText: { fontSize: 16, fontWeight: 'bold' },
+  progressBarBg: { height: 4, width: '100%' },
   progressBarFill: { height: '100%', backgroundColor: '#5865F2' },
   cardContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   cardWrapper: { width: '100%', height: height * 0.55 },
-  card: { position: 'absolute', width: '100%', height: '100%', backgroundColor: '#ffffff', borderRadius: 20, justifyContent: 'center', alignItems: 'center', padding: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 5, backfaceVisibility: 'hidden' },
+  card: { position: 'absolute', width: '100%', height: '100%', borderRadius: 20, justifyContent: 'center', alignItems: 'center', padding: 32, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 5, backfaceVisibility: 'hidden' },
   cardFront: {},
   cardBack: {},
-  cardText: { fontSize: 32, fontWeight: '500', color: '#1f2937', textAlign: 'center' },
+  cardText: { fontSize: 32, fontWeight: '500', textAlign: 'center' },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 40, paddingHorizontal: 20 },
-  navButton: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#e0e7ff', justifyContent: 'center', alignItems: 'center' },
-  navDisabled: { backgroundColor: '#f3f4f6' },
+  navButton: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   playButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', shadowColor: '#5865F2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }
 });

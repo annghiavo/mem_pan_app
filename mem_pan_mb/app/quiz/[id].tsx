@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { startStudySession, reviewCard, finishStudySession, getDeckCards } from '../../services/api';
@@ -8,6 +8,26 @@ export default function QuizScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const deckId = id as string;
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const theme = {
+    background: isDark ? '#111111' : '#f8f9fa',
+    surface: isDark ? '#1c1c1e' : '#ffffff',
+    text: isDark ? '#f4f4f5' : '#111827',
+    textMuted: isDark ? '#a1a1aa' : '#6b7280',
+    border: isDark ? '#3f3f46' : '#e5e7eb',
+    borderLight: isDark ? '#27272a' : '#f3f4f6',
+    primary: '#5865F2',
+    iconColor: isDark ? '#f4f4f5' : '#1f2937',
+    optionCorrectBg: isDark ? '#064e3b' : '#ecfdf5',
+    optionCorrectBorder: isDark ? '#10b981' : '#10b981',
+    optionCorrectText: isDark ? '#34d399' : '#047857',
+    optionIncorrectBg: isDark ? '#7f1d1d' : '#fef2f2',
+    optionIncorrectBorder: isDark ? '#ef4444' : '#ef4444',
+    optionIncorrectText: isDark ? '#f87171' : '#b91c1c',
+  };
 
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
@@ -125,16 +145,16 @@ export default function QuizScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#5865F2" />
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
   }
 
   if (!session || !session.cards || session.cards.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 18, color: '#4b5563', marginBottom: 16 }}>Không có thẻ nào để học lúc này!</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16 }}>Không có thẻ nào để học lúc này!</Text>
         <TouchableOpacity style={styles.nextButton} onPress={() => router.back()}>
           <Text style={styles.nextButtonText}>Quay lại</Text>
         </TouchableOpacity>
@@ -144,10 +164,10 @@ export default function QuizScreen() {
 
   if (sessionFinished) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Ionicons name="checkmark-circle" size={80} color="#10b981" style={{ marginBottom: 16 }} />
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827', marginBottom: 8 }}>Tuyệt vời!</Text>
-        <Text style={{ fontSize: 16, color: '#4b5563', marginBottom: 32 }}>Bạn đã hoàn thành phiên học.</Text>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>Tuyệt vời!</Text>
+        <Text style={{ fontSize: 16, color: theme.textMuted, marginBottom: 32 }}>Bạn đã hoàn thành phiên học.</Text>
         <TouchableOpacity style={[styles.nextButton, { width: 200 }]} onPress={() => router.back()}>
           <Text style={styles.nextButtonText}>Hoàn tất</Text>
         </TouchableOpacity>
@@ -159,40 +179,40 @@ export default function QuizScreen() {
   const cardContent = deckCardsMap[currentCardItem.cardId];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="close" size={28} color="#1f2937" />
+          <Ionicons name="close" size={28} color={theme.iconColor} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{currentIndex + 1} / {session.cards.length}</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{currentIndex + 1} / {session.cards.length}</Text>
         <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="settings-outline" size={24} color="#1f2937" />
+          <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.progressBarBg}>
+      <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
         <View style={[styles.progressBarFill, { width: `${((currentIndex) / session.cards.length) * 100}%` }]} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.questionContainer}>
-          <Text style={styles.questionLabel}>Định nghĩa</Text>
-          <Text style={styles.questionText}>{cardContent?.contentFront}</Text>
+          <Text style={[styles.questionLabel, { color: theme.textMuted }]}>Định nghĩa</Text>
+          <Text style={[styles.questionText, { color: theme.text }]}>{cardContent?.contentFront}</Text>
         </View>
 
         <View style={styles.optionsContainer}>
-          <Text style={styles.optionsLabel}>Chọn thuật ngữ đúng</Text>
+          <Text style={[styles.optionsLabel, { color: theme.textMuted }]}>Chọn thuật ngữ đúng</Text>
           {options.map((opt, index) => {
-            let optionStyle = styles.optionCard;
-            let textStyle = styles.optionText;
+            let optionStyle = [styles.optionCard, { backgroundColor: theme.surface, borderColor: theme.border }];
+            let textStyle = [styles.optionText, { color: theme.text }];
             
             if (isAnswered) {
               if (index === correctIndex) {
-                optionStyle = [styles.optionCard, styles.optionCorrect] as any;
-                textStyle = [styles.optionText, styles.textCorrect] as any;
+                optionStyle = [styles.optionCard, { backgroundColor: theme.optionCorrectBg, borderColor: theme.optionCorrectBorder }] as any;
+                textStyle = [styles.optionText, { color: theme.optionCorrectText }] as any;
               } else if (index === selectedOption) {
-                optionStyle = [styles.optionCard, styles.optionIncorrect] as any;
-                textStyle = [styles.optionText, styles.textIncorrect] as any;
+                optionStyle = [styles.optionCard, { backgroundColor: theme.optionIncorrectBg, borderColor: theme.optionIncorrectBorder }] as any;
+                textStyle = [styles.optionText, { color: theme.optionIncorrectText }] as any;
               }
             }
 
@@ -211,7 +231,7 @@ export default function QuizScreen() {
       </ScrollView>
 
       {isAnswered && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.borderLight }]}>
           <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
             <Text style={styles.nextButtonText}>{currentIndex < session.cards.length - 1 ? 'Tiếp tục' : 'Hoàn thành'}</Text>
           </TouchableOpacity>
@@ -222,25 +242,21 @@ export default function QuizScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#374151' },
+  headerTitle: { fontSize: 16, fontWeight: 'bold' },
   iconButton: { padding: 8 },
-  progressBarBg: { height: 4, backgroundColor: '#e5e7eb', width: '100%' },
+  progressBarBg: { height: 4, width: '100%' },
   progressBarFill: { height: '100%', backgroundColor: '#5865F2' },
   content: { padding: 20 },
   questionContainer: { marginBottom: 40 },
-  questionLabel: { fontSize: 14, color: '#6b7280', fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
-  questionText: { fontSize: 24, color: '#111827', fontWeight: '500', lineHeight: 34 },
+  questionLabel: { fontSize: 14, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
+  questionText: { fontSize: 24, fontWeight: '500', lineHeight: 34 },
   optionsContainer: { flex: 1 },
-  optionsLabel: { fontSize: 16, color: '#4b5563', fontWeight: '600', marginBottom: 16 },
-  optionCard: { backgroundColor: '#ffffff', padding: 20, borderRadius: 16, marginBottom: 12, borderWidth: 2, borderColor: '#e5e7eb' },
-  optionText: { fontSize: 18, color: '#1f2937', textAlign: 'center', fontWeight: '500' },
-  optionCorrect: { borderColor: '#10b981', backgroundColor: '#ecfdf5' },
-  textCorrect: { color: '#047857' },
-  optionIncorrect: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
-  textIncorrect: { color: '#b91c1c' },
-  footer: { padding: 20, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  optionsLabel: { fontSize: 16, fontWeight: '600', marginBottom: 16 },
+  optionCard: { padding: 20, borderRadius: 16, marginBottom: 12, borderWidth: 2 },
+  optionText: { fontSize: 18, textAlign: 'center', fontWeight: '500' },
+  footer: { padding: 20, borderTopWidth: 1 },
   nextButton: { backgroundColor: '#5865F2', paddingVertical: 16, borderRadius: 30, alignItems: 'center', paddingHorizontal: 24 },
   nextButtonText: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' }
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getDecks, getFolders } from '../../services/api';
@@ -11,6 +11,22 @@ export default function LibraryScreen() {
   const [folders, setFolders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  const theme = {
+    background: isDark ? '#111111' : '#f8f9fa',
+    surface: isDark ? '#1c1c1e' : '#ffffff',
+    text: isDark ? '#f4f4f5' : '#1f2937',
+    textMuted: isDark ? '#a1a1aa' : '#6b7280',
+    border: isDark ? '#27272a' : '#f3f4f6',
+    primary: '#5865F2',
+    activeTabBg: isDark ? '#312e81' : '#EEF2FF',
+    iconBg: isDark ? '#0c4a6e' : '#e0f2fe',
+    folderBg: isDark ? '#3f3f46' : '#f3f4f6',
+    moreBtn: isDark ? '#27272a' : '#f3f4f6',
+  };
 
   const tabs = ['Học phần', 'Thư mục'];
 
@@ -44,87 +60,88 @@ export default function LibraryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <View style={styles.tabsContainer}>
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              style={[
+                styles.tab, 
+                activeTab === tab && { backgroundColor: theme.activeTabBg, borderColor: theme.primary, borderWidth: 1 }
+              ]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+              <Text style={[styles.tabText, { color: activeTab === tab ? theme.primary : theme.textMuted }]}>
                 {tab}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity style={styles.moreButton}>
-          <Ionicons name="ellipsis-horizontal" size={24} color="#1f2937" />
+        <TouchableOpacity style={[styles.moreButton, { backgroundColor: theme.moreBtn }]}>
+          <Ionicons name="ellipsis-horizontal" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#5865F2" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
           }
         >
-          {activeTab === 'Học phần' && (
+          {activeTab === 'Học phần' ? (
             <>
               <View style={styles.filterContainer}>
-                <Text style={styles.filterText}>Tất cả</Text>
-                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+                <Text style={[styles.filterText, { color: theme.textMuted }]}>Tất cả</Text>
+                <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
               </View>
-              <Text style={styles.dateHeader}>Gần đây</Text>
+              <Text style={[styles.dateHeader, { color: theme.text }]}>Gần đây</Text>
               {decks.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Chưa có học phần nào</Text>
+                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>Chưa có học phần nào</Text>
                 </View>
               ) : (
                 decks.map((deck) => (
-                  <TouchableOpacity key={deck.deckId} style={styles.itemCard} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
-                    <View style={styles.itemIconContainer}>
-                      <Ionicons name="albums-outline" size={24} color="#0284c7" />
+                  <TouchableOpacity key={deck.deckId} style={[styles.itemCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                    <View style={[styles.itemIconContainer, { backgroundColor: theme.iconBg }]}>
+                      <Ionicons name="albums-outline" size={24} color={isDark ? '#38bdf8' : '#0284c7'} />
                     </View>
                     <View style={styles.itemInfo}>
-                      <Text style={styles.itemTitle} numberOfLines={1}>{deck.name}</Text>
-                      <Text style={styles.itemSubtitle}>Học phần • {deck.cardCount || 0} thuật ngữ</Text>
+                      <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                      <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>Học phần • {deck.cardCount || 0} thuật ngữ</Text>
                     </View>
                   </TouchableOpacity>
                 ))
               )}
             </>
-          )}
+          ) : null}
 
-          {activeTab === 'Thư mục' && (
+          {activeTab === 'Thư mục' ? (
             <>
               {folders.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Chưa có thư mục nào</Text>
+                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>Chưa có thư mục nào</Text>
                 </View>
               ) : (
                 folders.map((folder) => (
-                  <TouchableOpacity key={folder.folderId} style={styles.itemCard} onPress={() => router.push(`/folder/${folder.folderId}` as any)}>
-                    <View style={styles.folderIconContainer}>
-                      <Ionicons name="folder-outline" size={24} color="#4b5563" />
+                  <TouchableOpacity key={folder.folderId} style={[styles.itemCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/folder/${folder.folderId}` as any)}>
+                    <View style={[styles.folderIconContainer, { backgroundColor: theme.folderBg }]}>
+                      <Ionicons name="folder-outline" size={24} color={theme.textMuted} />
                     </View>
                     <View style={styles.itemInfo}>
-                      <Text style={styles.itemTitle} numberOfLines={1}>{folder.name}</Text>
-                      <Text style={styles.itemSubtitle}>Thư mục</Text>
+                      <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{folder.name}</Text>
+                      <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>Thư mục</Text>
                     </View>
                   </TouchableOpacity>
                 ))
               )}
             </>
-          )}
-          
-
+          ) : null}
           
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -136,7 +153,6 @@ export default function LibraryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
@@ -145,8 +161,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    backgroundColor: '#ffffff',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -157,22 +171,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 8,
   },
-  activeTab: {
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#5865F2',
-  },
   tabText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#6b7280',
-  },
-  activeTabText: {
-    color: '#5865F2',
   },
   moreButton: {
     padding: 8,
-    backgroundColor: '#f3f4f6',
     borderRadius: 20,
   },
   centerContainer: {
@@ -186,7 +190,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#6b7280',
     fontSize: 16,
   },
   scrollContent: {
@@ -200,24 +203,20 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4b5563',
     marginRight: 4,
   },
   dateHeader: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4b5563',
     marginBottom: 12,
     marginTop: 8,
   },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -226,7 +225,6 @@ const styles = StyleSheet.create({
   itemIconContainer: {
     width: 48,
     height: 48,
-    backgroundColor: '#e0f2fe',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -235,7 +233,6 @@ const styles = StyleSheet.create({
   folderIconContainer: {
     width: 48,
     height: 48,
-    backgroundColor: '#f3f4f6',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -247,11 +244,9 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1f2937',
     marginBottom: 4,
   },
   itemSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
   },
 });

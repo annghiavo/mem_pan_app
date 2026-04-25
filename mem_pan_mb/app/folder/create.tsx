@@ -1,11 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createFolder } from '../../services/api';
 
 export default function CreateFolderScreen() {
   const router = useRouter();
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const theme = {
+    background: isDark ? '#111111' : '#ffffff',
+    text: isDark ? '#f4f4f5' : '#1f2937',
+    textMuted: isDark ? '#a1a1aa' : '#9ca3af',
+    border: isDark ? '#27272a' : '#e5e7eb',
+    primary: isDark ? '#818cf8' : '#4255ff',
+    iconColor: isDark ? '#f4f4f5' : '#4b5563',
+    cancelBg: isDark ? '#27272a' : '#f3f4f6',
+    cancelText: isDark ? '#f4f4f5' : '#1f2937',
+    disabledBtn: isDark ? '#3f3f46' : '#9ca3af',
+  };
+
   const [folderName, setFolderName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,14 +43,14 @@ export default function CreateFolderScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Text style={styles.cancelText}>Hủy</Text>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: theme.cancelBg }]}>
+          <Text style={[styles.cancelText, { color: theme.cancelText }]}>Hủy</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           onPress={handleCreate} 
-          style={[styles.createButton, !folderName.trim() && styles.createButtonDisabled]}
+          style={[styles.createButton, { backgroundColor: theme.primary }, !folderName.trim() && { backgroundColor: theme.disabledBtn }]}
           disabled={!folderName.trim() || isLoading}
         >
           {isLoading ? (
@@ -47,12 +63,12 @@ export default function CreateFolderScreen() {
 
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Ionicons name="folder-outline" size={48} color="#4b5563" />
+          <Ionicons name="folder-outline" size={48} color={theme.iconColor} />
         </View>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: theme.text, borderBottomColor: theme.border }]}
           placeholder="Thư mục chưa đặt tên"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={theme.textMuted}
           value={folderName}
           onChangeText={setFolderName}
           autoFocus
@@ -66,7 +82,6 @@ export default function CreateFolderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
   },
   header: {
     flexDirection: 'row',
@@ -78,22 +93,16 @@ const styles = StyleSheet.create({
   headerButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f3f4f6',
     borderRadius: 20,
   },
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1f2937',
   },
   createButton: {
     paddingVertical: 8,
     paddingHorizontal: 24,
-    backgroundColor: '#4255ff',
     borderRadius: 20,
-  },
-  createButtonDisabled: {
-    backgroundColor: '#9ca3af',
   },
   createText: {
     fontSize: 16,
@@ -112,10 +121,8 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1f2937',
     width: '100%',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
 });

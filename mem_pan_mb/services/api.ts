@@ -1,23 +1,27 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-let authToken = '';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1';let authToken = '';
 let currentRefreshToken = '';
 
-export const setAuthToken = (token: string) => {
+export const setAuthToken = async (token: string) => {
   authToken = token;
+  await AsyncStorage.setItem('authToken', token);
 };
 
-export const setRefreshToken = (token: string) => {
+export const setRefreshToken = async (token: string) => {
   currentRefreshToken = token;
+  await AsyncStorage.setItem('refreshToken', token);
 };
 
 export const getRefreshToken = () => {
   return currentRefreshToken;
 };
 
-export const clearAuth = () => {
+export const clearAuth = async () => {
   authToken = '';
   currentRefreshToken = '';
+  await AsyncStorage.removeItem('authToken');
+  await AsyncStorage.removeItem('refreshToken');
 };
 
 const request = async (endpoint: string, options: RequestInit = {}) => {
@@ -25,6 +29,11 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  if (!authToken) {
+    authToken = await AsyncStorage.getItem('authToken') || '';
+    currentRefreshToken = await AsyncStorage.getItem('refreshToken') || '';
+  }
 
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`;
@@ -62,6 +71,13 @@ export const getCurrentUser = () => {
   return request('/users/me');
 };
 
+export const changePassword = (oldPassword: string, newPassword: string) => {
+  return request('/users/me/password', {
+    method: 'PATCH',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+};
+
 // --- Decks ---
 export const getDecks = (page = 1, pageSize = 20) => {
   return request(`/decks?page=${page}&pageSize=${pageSize}`);
@@ -76,6 +92,27 @@ export const createDeck = (name: string, description: string, isPublic: boolean)
 
 export const getDeck = (deckId: string) => {
   return request(`/decks/${deckId}`);
+};
+
+export const updateDeck = (deckId: string, name: string, description: string) => {
+  return request(`/decks/${deckId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name, description }),
+  });
+};
+
+export const updateDeckSettings = (deckId: string, settings: any) => {
+  return request(`/decks/${deckId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ settings }),
+  });
+};
+
+export const updateDeckVisibility = (deckId: string, isPublic: boolean) => {
+  return request(`/decks/${deckId}/visibility`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isPublic }),
+  });
 };
 
 export const deleteDeck = (deckId: string) => {
@@ -110,6 +147,13 @@ export const getFolder = (folderId: string) => {
   return request(`/folders/${folderId}`);
 };
 
+export const updateFolder = (folderId: string, name: string, description: string) => {
+  return request(`/folders/${folderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name, description }),
+  });
+};
+
 export const deleteFolder = (folderId: string) => {
   return request(`/folders/${folderId}`, { method: 'DELETE' });
 };
@@ -123,6 +167,14 @@ export const removeDeckFromFolder = (folderId: string, deckId: string) => {
 };
 
 // --- Study ---
+export const getRecentDecks = () => {
+  return request('/study/decks/recent');
+};
+
+export const getDeckProgress = (deckId: string) => {
+  return request(`/study/decks/${deckId}/progress`);
+};
+
 export const getDueCards = (deckId?: string) => {
   const query = deckId ? `?deckId=${deckId}` : '';
   return request(`/study/due${query}`);
@@ -133,6 +185,10 @@ export const startStudySession = (deckId: string, newCardsLimit: number = 10, re
     method: 'POST',
     body: JSON.stringify({ deckId, newCardsLimit, reviewLimit }),
   });
+};
+
+export const getRecentSessionCards = () => {
+  return request('/study/sessions/recent/cards');
 };
 
 export const getStudySession = (sessionId: string) => {

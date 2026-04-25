@@ -1,16 +1,48 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, useColorScheme, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function TabLayout() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          router.replace('/(auth)/login');
+        }
+      } catch (e) {
+        setIsAuthenticated(false);
+        router.replace('/(auth)/login');
+      }
+    };
+    checkAuth();
+  }, []);
+
+  if (isAuthenticated === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#111111' : '#f8f9fa' }}>
+        <ActivityIndicator size="large" color="#5865F2" />
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#5865F2', // Blue-indigo color
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarInactiveTintColor: isDark ? '#a1a1aa' : '#6b7280',
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { backgroundColor: isDark ? '#1c1c1e' : '#ffffff' }],
         tabBarLabelStyle: styles.tabBarLabel,
       }}>
       <Tabs.Screen
@@ -50,8 +82,8 @@ const styles = StyleSheet.create({
     bottom: Platform.OS === 'ios' ? 20 : 10,
     left: 20,
     right: 20,
-    elevation: 0,
-    backgroundColor: '#ffffff',
+    elevation: 10,
+    zIndex: 10,
     borderRadius: 30,
     height: 60,
     shadowColor: '#000',
