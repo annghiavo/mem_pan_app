@@ -142,7 +142,7 @@ export default function SettingsScreen() {
     >
       <View style={styles.settingItemContent}>
         <Text style={[styles.settingItemTitle, { color: theme.text }]}>{title}</Text>
-        {!!value && <Text style={[styles.settingItemValue, { color: theme.textMuted }]}>{value}</Text>}
+        {!!value ? <Text style={[styles.settingItemValue, { color: theme.textMuted }]}>{value}</Text> : null}
       </View>
       {isSwitch ? (
         <Switch
@@ -164,7 +164,7 @@ export default function SettingsScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Cài đặt</Text>
-        <View style={{ width: 24 }} /> {/* Spacer */}
+        <View style={{ width: 24 }} />
       </View>
 
       {loading ? (

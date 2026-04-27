@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createDeck, bulkCreateCards } from '../../services/api';
@@ -36,6 +36,28 @@ export default function CreateModuleScreen() {
     { id: '2', term: '', definition: '' },
   ]);
 
+  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [termLang, setTermLang] = useState('Tiếng Anh');
+  const [defLang, setDefLang] = useState('Tiếng Việt');
+  const [whoCanView, setWhoCanView] = useState('Mọi người');
+  const [whoCanEdit, setWhoCanEdit] = useState('Chỉ tôi');
+
+  const langCodeMap: Record<string, string> = {
+    'Tiếng Việt': 'vi',
+    'Tiếng Anh': 'en',
+    'Tiếng Tây Ban Nha': 'es',
+    'Tiếng Pháp': 'fr',
+    'Tiếng Ý': 'it',
+    'Tiếng Đức': 'de',
+    'Tiếng Nga': 'ru',
+    'Tiếng Nhật': 'ja',
+    'Tiếng Nhật (Romaji)': 'ja_romaji',
+    'Tiếng Trung (Giản thể)': 'zh_hans',
+    'Tiếng Trung (Phồn thể)': 'zh_hant',
+    'Tiếng Trung (Pinyin)': 'zh_pinyin',
+    'Tiếng Hàn': 'ko',
+  };
+
   const addTerm = () => {
     setTerms([...terms, { id: Date.now().toString(), term: '', definition: '' }]);
   };
@@ -59,7 +81,8 @@ export default function CreateModuleScreen() {
     setIsLoading(true);
     try {
       // 1. Create Deck
-      const deckRes = await createDeck(title.trim(), description.trim(), true);
+      const isPublic = whoCanView === 'Mọi người';
+      const deckRes = await createDeck(title.trim(), description.trim(), isPublic);
       const deckId = deckRes.deck.deckId;
 
       // 2. Add Cards to Deck
@@ -67,6 +90,8 @@ export default function CreateModuleScreen() {
         contentFront: t.term.trim(),
         contentBack: t.definition.trim(),
         imageUrl: '',
+        langFront: langCodeMap[termLang] || 'en',
+        langBack: langCodeMap[defLang] || 'vi',
       }));
       
       await bulkCreateCards(deckId, cardsData);
@@ -90,7 +115,7 @@ export default function CreateModuleScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Tạo học phần</Text>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
+            <TouchableOpacity onPress={() => setIsSettingsVisible(true)} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
               <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleSave} style={[styles.iconButton, { backgroundColor: theme.iconBg }]} disabled={isLoading}>
@@ -167,6 +192,98 @@ export default function CreateModuleScreen() {
           <Ionicons name="add" size={24} color="#ffffff" />
         </TouchableOpacity>
       </KeyboardAvoidingView>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={isSettingsVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsSettingsVisible(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.background }]}>
+            <TouchableOpacity onPress={() => setIsSettingsVisible(false)} style={styles.modalBackButton}>
+              <Ionicons name="arrow-back" size={24} color={theme.iconColor} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Cài đặt</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Ngôn ngữ</Text>
+            <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <TouchableOpacity style={styles.settingRow} onPress={() => {
+                Alert.alert('Chọn ngôn ngữ', '', [
+                  { text: 'Tiếng Việt', onPress: () => setTermLang('Tiếng Việt') },
+                  { text: 'Tiếng Anh', onPress: () => setTermLang('Tiếng Anh') },
+                  { text: 'Tiếng Tây Ban Nha', onPress: () => setTermLang('Tiếng Tây Ban Nha') },
+                  { text: 'Tiếng Pháp', onPress: () => setTermLang('Tiếng Pháp') },
+                  { text: 'Tiếng Ý', onPress: () => setTermLang('Tiếng Ý') },
+                  { text: 'Tiếng Đức', onPress: () => setTermLang('Tiếng Đức') },
+                  { text: 'Tiếng Nga', onPress: () => setTermLang('Tiếng Nga') },
+                  { text: 'Tiếng Nhật', onPress: () => setTermLang('Tiếng Nhật') },
+                  { text: 'Tiếng Nhật (Romaji)', onPress: () => setTermLang('Tiếng Nhật (Romaji)') },
+                  { text: 'Tiếng Trung (Giản thể)', onPress: () => setTermLang('Tiếng Trung (Giản thể)') },
+                  { text: 'Tiếng Trung (Phồn thể)', onPress: () => setTermLang('Tiếng Trung (Phồn thể)') },
+                  { text: 'Tiếng Trung (Pinyin)', onPress: () => setTermLang('Tiếng Trung (Pinyin)') },
+                  { text: 'Tiếng Hàn', onPress: () => setTermLang('Tiếng Hàn') },
+                  { text: 'Hủy', style: 'cancel' }
+                ]);
+              }}>
+                <Text style={[styles.settingLabel, { color: theme.text }]}>Thuật ngữ</Text>
+                <Text style={[styles.settingValue, { color: theme.primary }]}>{termLang}</Text>
+              </TouchableOpacity>
+              <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
+              <TouchableOpacity style={styles.settingRow} onPress={() => {
+                Alert.alert('Chọn ngôn ngữ', '', [
+                  { text: 'Tiếng Việt', onPress: () => setDefLang('Tiếng Việt') },
+                  { text: 'Tiếng Anh', onPress: () => setDefLang('Tiếng Anh') },
+                  { text: 'Tiếng Tây Ban Nha', onPress: () => setDefLang('Tiếng Tây Ban Nha') },
+                  { text: 'Tiếng Pháp', onPress: () => setDefLang('Tiếng Pháp') },
+                  { text: 'Tiếng Ý', onPress: () => setDefLang('Tiếng Ý') },
+                  { text: 'Tiếng Đức', onPress: () => setDefLang('Tiếng Đức') },
+                  { text: 'Tiếng Nga', onPress: () => setDefLang('Tiếng Nga') },
+                  { text: 'Tiếng Nhật', onPress: () => setDefLang('Tiếng Nhật') },
+                  { text: 'Tiếng Nhật (Romaji)', onPress: () => setDefLang('Tiếng Nhật (Romaji)') },
+                  { text: 'Tiếng Trung (Giản thể)', onPress: () => setDefLang('Tiếng Trung (Giản thể)') },
+                  { text: 'Tiếng Trung (Phồn thể)', onPress: () => setDefLang('Tiếng Trung (Phồn thể)') },
+                  { text: 'Tiếng Trung (Pinyin)', onPress: () => setDefLang('Tiếng Trung (Pinyin)') },
+                  { text: 'Tiếng Hàn', onPress: () => setDefLang('Tiếng Hàn') },
+                  { text: 'Hủy', style: 'cancel' }
+                ]);
+              }}>
+                <Text style={[styles.settingLabel, { color: theme.text }]}>Định nghĩa</Text>
+                <Text style={[styles.settingValue, { color: theme.primary }]}>{defLang}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: 24 }]}>Quyền riêng tư</Text>
+            <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <TouchableOpacity style={styles.settingRow} onPress={() => {
+                Alert.alert('Ai có thể xem', '', [
+                  { text: 'Mọi người', onPress: () => setWhoCanView('Mọi người') },
+                  { text: 'Chỉ tôi', onPress: () => setWhoCanView('Chỉ tôi') },
+                  { text: 'Hủy', style: 'cancel' }
+                ]);
+              }}>
+                <Text style={[styles.settingLabel, { color: theme.text }]}>Ai có thể xem</Text>
+                <Text style={[styles.settingValue, { color: theme.primary }]}>{whoCanView}</Text>
+              </TouchableOpacity>
+              <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
+              <TouchableOpacity style={styles.settingRow} onPress={() => {
+                Alert.alert('Ai có thể sửa', '', [
+                  { text: 'Mọi người', onPress: () => setWhoCanEdit('Mọi người') },
+                  { text: 'Chỉ tôi', onPress: () => setWhoCanEdit('Chỉ tôi') },
+                  { text: 'Hủy', style: 'cancel' }
+                ]);
+              }}>
+                <Text style={[styles.settingLabel, { color: theme.text }]}>Ai có thể sửa</Text>
+                <Text style={[styles.settingValue, { color: theme.primary }]}>{whoCanEdit}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -191,4 +308,15 @@ const styles = StyleSheet.create({
   termInput: { fontSize: 16, paddingVertical: 8 },
   divider: { height: 1, marginVertical: 8 },
   fab: { position: 'absolute', bottom: 32, alignSelf: 'center', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  modalContainer: { flex: 1 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  modalBackButton: { padding: 8, marginLeft: -8, width: 40, alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  modalContent: { flex: 1, paddingTop: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginLeft: 16 },
+  settingGroup: { borderTopWidth: 1, borderBottomWidth: 1 },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  settingLabel: { fontSize: 16 },
+  settingValue: { fontSize: 16, fontWeight: '500' },
+  modalDivider: { height: 1, marginLeft: 16 },
 });

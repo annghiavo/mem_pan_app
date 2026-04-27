@@ -230,13 +230,13 @@ export default function QuizScreen() {
         </View>
       </ScrollView>
 
-      {isAnswered && (
+      {isAnswered ? (
         <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.borderLight }]}>
           <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
             <Text style={styles.nextButtonText}>{currentIndex < session.cards.length - 1 ? 'Tiếp tục' : 'Hoàn thành'}</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }

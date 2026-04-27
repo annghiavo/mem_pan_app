@@ -2,7 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard } from '../../services/api';
+
+const langNameMap: Record<string, string> = {
+  vi: 'Tiếng Việt',
+  en: 'Tiếng Anh',
+  es: 'Tiếng Tây Ban Nha',
+  fr: 'Tiếng Pháp',
+  it: 'Tiếng Ý',
+  de: 'Tiếng Đức',
+  ru: 'Tiếng Nga',
+  ja: 'Tiếng Nhật',
+  ja_romaji: 'Tiếng Nhật (Romaji)',
+  zh_hans: 'Tiếng Trung (Giản thể)',
+  zh_hant: 'Tiếng Trung (Phồn thể)',
+  zh_pinyin: 'Tiếng Trung (Pinyin)',
+  ko: 'Tiếng Hàn',
+};
 
 export default function ModuleDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -181,6 +197,10 @@ export default function ModuleDetailScreen() {
             <Ionicons name="refresh-circle" size={24} color={cards.length > 0 ? "#8b5cf6" : theme.textMuted} />
             <Text style={[styles.actionButtonText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Câu hỏi ôn tập</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/practice-setup/${id}` as any)} disabled={cards.length === 0}>
+            <Ionicons name="document-text" size={24} color={cards.length > 0 ? "#10b981" : theme.textMuted} />
+            <Text style={[styles.actionButtonText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Bài kiểm tra</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Progress */}
@@ -221,7 +241,12 @@ export default function ModuleDetailScreen() {
         {cards.map((item) => (
           <View key={item.cardId} style={[styles.termCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
             <View style={styles.termCardHeader}>
-              <Text style={[styles.termWord, { color: theme.text }]}>{item.contentFront}</Text>
+              <View style={{ flex: 1 }}>
+                {item.langFront ? (
+                  <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langFront] || item.langFront}</Text>
+                ) : null}
+                <Text style={[styles.termWord, { color: theme.text }]}>{item.contentFront}</Text>
+              </View>
               <View style={styles.termActions}>
                 <TouchableOpacity style={{ marginRight: 16 }}>
                   <Ionicons name="volume-medium" size={24} color={theme.textMuted} />
@@ -231,6 +256,9 @@ export default function ModuleDetailScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+            {item.langBack ? (
+              <Text style={[styles.termLangLabel, { color: theme.primary, marginTop: 8 }]}>{langNameMap[item.langBack] || item.langBack}</Text>
+            ) : null}
             <Text style={[styles.termDefinition, { color: theme.textMuted }]}>{item.contentBack}</Text>
           </View>
         ))}
@@ -364,6 +392,7 @@ const styles = StyleSheet.create({
   termWord: { fontSize: 18, fontWeight: '500', flex: 1 },
   termActions: { flexDirection: 'row' },
   termDefinition: { fontSize: 16, lineHeight: 24 },
+  termLangLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   bottomSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
   bottomSheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },

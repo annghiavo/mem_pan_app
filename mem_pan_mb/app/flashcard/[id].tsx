@@ -6,6 +6,22 @@ import { getDeckCards } from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
 
+const langNameMap: Record<string, string> = {
+  vi: 'Tiếng Việt',
+  en: 'Tiếng Anh',
+  es: 'Tiếng Tây Ban Nha',
+  fr: 'Tiếng Pháp',
+  it: 'Tiếng Ý',
+  de: 'Tiếng Đức',
+  ru: 'Tiếng Nga',
+  ja: 'Tiếng Nhật',
+  ja_romaji: 'Tiếng Nhật (Romaji)',
+  zh_hans: 'Tiếng Trung (Giản thể)',
+  zh_hant: 'Tiếng Trung (Phồn thể)',
+  zh_pinyin: 'Tiếng Trung (Pinyin)',
+  ko: 'Tiếng Hàn',
+};
+
 export default function FlashcardScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -126,10 +142,16 @@ export default function FlashcardScreen() {
         <TouchableOpacity activeOpacity={1} onPress={flipCard} style={styles.cardWrapper}>
           {/* Front */}
           <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+            {cards[currentIndex].langFront ? (
+              <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langFront] || cards[currentIndex].langFront}</Text>
+            ) : null}
             <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentFront}</Text>
           </Animated.View>
           {/* Back */}
           <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+            {cards[currentIndex].langBack ? (
+              <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langBack] || cards[currentIndex].langBack}</Text>
+            ) : null}
             <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentBack}</Text>
           </Animated.View>
         </TouchableOpacity>
@@ -164,6 +186,7 @@ const styles = StyleSheet.create({
   cardFront: {},
   cardBack: {},
   cardText: { fontSize: 32, fontWeight: '500', textAlign: 'center' },
+  cardLangLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, position: 'absolute', top: 20 },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 40, paddingHorizontal: 20 },
   navButton: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   playButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', shadowColor: '#5865F2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }

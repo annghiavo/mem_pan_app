@@ -119,16 +119,53 @@ export const deleteDeck = (deckId: string) => {
   return request(`/decks/${deckId}`, { method: 'DELETE' });
 };
 
+export const getPublicDecks = (page = 1, pageSize = 20) => {
+  return request(`/decks/public?page=${page}&pageSize=${pageSize}`);
+};
+
+export const getDeckStats = (deckId: string) => {
+  return request(`/decks/${deckId}/stats`);
+};
+
+export const cloneDeck = (deckId: string) => {
+  return request(`/decks/${deckId}/clone`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+};
+
 // --- Cards ---
 export const getDeckCards = (deckId: string) => {
   return request(`/decks/${deckId}/cards`);
 };
 
-export const bulkCreateCards = (deckId: string, cards: any[]) => {
+export const createCard = (deckId: string, data: { contentFront: string; contentBack: string; imageUrl?: string; position?: number; langFront?: string; langBack?: string }) => {
+  return request(`/decks/${deckId}/cards`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const bulkCreateCards = (deckId: string, cards: { contentFront: string; contentBack: string; imageUrl?: string; langFront?: string; langBack?: string }[]) => {
   return request(`/decks/${deckId}/cards/bulk`, {
     method: 'POST',
     body: JSON.stringify({ cards }),
   });
+};
+
+export const getCard = (cardId: string) => {
+  return request(`/cards/${cardId}`);
+};
+
+export const updateCard = (cardId: string, data: { contentFront?: string; contentBack?: string; imageUrl?: string; langFront?: string; langBack?: string }) => {
+  return request(`/cards/${cardId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const deleteCard = (cardId: string) => {
+  return request(`/cards/${cardId}`, { method: 'DELETE' });
 };
 
 // --- Folders ---
