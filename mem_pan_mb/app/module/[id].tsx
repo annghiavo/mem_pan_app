@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard } from '../../services/api';
@@ -42,6 +42,8 @@ export default function ModuleDetailScreen() {
   const [cards, setCards] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
   const [dueCount, setDueCount] = useState<number>(0);
+  const [creatorUsername, setCreatorUsername] = useState<string>('');
+  const [creatorAvatar, setCreatorAvatar] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   // Modal States
@@ -62,6 +64,8 @@ export default function ModuleDetailScreen() {
           getDueCards(id as string).catch(() => ({ total: 0 }))
         ]);
         setDeckData(deckRes.deck);
+        setCreatorUsername(deckRes.creatorUsername || '');
+        setCreatorAvatar(deckRes.creatorAvatar || '');
         setCards(cardsRes.cards || []);
         setProgress(progressRes || { newCount: cardsRes.cards?.length || 0, studyingCount: 0, memorizedCount: 0 });
         setDueCount(dueRes?.total || 0);
@@ -179,10 +183,14 @@ export default function ModuleDetailScreen() {
         {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted }]}>{deckData.description}</Text> : null}
         
         <View style={styles.authorContainer}>
-          <View style={styles.authorAvatar}>
-            <Text style={styles.authorAvatarText}>Q</Text>
-          </View>
-          <Text style={[styles.authorName, { color: theme.text }]}>Bạn</Text>
+          {creatorAvatar ? (
+            <Image source={{ uri: creatorAvatar }} style={styles.authorAvatarImage} />
+          ) : (
+            <View style={styles.authorAvatar}>
+              <Text style={styles.authorAvatarText}>{(creatorUsername || 'U').charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text style={[styles.authorName, { color: theme.text }]}>{creatorUsername || 'Bạn'}</Text>
           <Ionicons name="checkmark-circle" size={16} color="#10b981" style={{ marginLeft: 4 }} />
           <Text style={[styles.termCount, { color: theme.textMuted }]}> | {cards.length} thuật ngữ</Text>
         </View>
@@ -372,6 +380,7 @@ const styles = StyleSheet.create({
   moduleDesc: { fontSize: 16, marginBottom: 12 },
   authorContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   authorAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  authorAvatarImage: { width: 24, height: 24, borderRadius: 12, marginRight: 8 },
   authorAvatarText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
   authorName: { fontSize: 16, fontWeight: '600' },
   termCount: { fontSize: 16 },

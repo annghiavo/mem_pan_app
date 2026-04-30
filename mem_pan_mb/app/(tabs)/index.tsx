@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getRecentDecks, getDeck, getDeckProgress } from '../../services/api';
+import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser } from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -20,6 +20,8 @@ export default function HomeScreen() {
 
   const [recentDecks, setRecentDecks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [username, setUsername] = useState('M');
 
   React.useEffect(() => {
     const fetchRecent = async () => {
@@ -33,6 +35,8 @@ export default function HomeScreen() {
               return {
                 ...d,
                 ...deckRes.deck,
+                creatorUsername: deckRes.creatorUsername || '',
+                creatorAvatar: deckRes.creatorAvatar || '',
                 progress: progressRes
               };
             } catch (e) {
@@ -49,6 +53,15 @@ export default function HomeScreen() {
       }
     };
     fetchRecent();
+    const fetchUser = async () => {
+      try {
+        const data = await getCurrentUser();
+        const u = data.user || data.data || data;
+        if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
+        if (u?.username) setUsername(u.username);
+      } catch (e) {}
+    };
+    fetchUser();
   }, []);
 
   const continueDeck = recentDecks.length > 0 ? recentDecks[0] : null;
@@ -66,7 +79,11 @@ export default function HomeScreen() {
             <TextInput placeholder="Tìm kiếm" placeholderTextColor={theme.textMuted} style={[styles.searchInput, { color: theme.text }]} />
           </View>
           <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(settings)' as any)}>
-            <Text style={styles.avatarText}>M</Text>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{(username || 'M').charAt(0).toUpperCase()}</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -98,12 +115,16 @@ export default function HomeScreen() {
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Gần đây</Text>
             {recentDecks.slice(1).map((deck, idx) => (
               <TouchableOpacity key={idx} style={[styles.recentItem, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
-                <View style={[styles.recentIcon, { backgroundColor: isDark ? '#115e59' : '#e0f2f1' }]}>
-                  <Ionicons name="albums-outline" size={24} color={isDark ? '#5eead4' : '#008080'} />
-                </View>
+                {deck.creatorAvatar ? (
+                  <Image source={{ uri: deck.creatorAvatar }} style={styles.recentAvatarImage} />
+                ) : (
+                  <View style={[styles.recentIcon, { backgroundColor: isDark ? '#115e59' : '#e0f2f1' }]}>
+                    <Text style={{ color: isDark ? '#5eead4' : '#008080', fontWeight: 'bold', fontSize: 16 }}>{(deck.creatorUsername || 'U').charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
                 <View style={styles.recentInfo}>
                   <Text style={[styles.recentTitle, { color: theme.text }]}>{deck.name}</Text>
-                  <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{(deck.progress?.totalCount || 0)} thẻ • Tác giả: {deck.userId === 'me' ? 'bạn' : 'Quizlet'}</Text>
+                  <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{(deck.cardCount || deck.progress?.totalCount || 0)} thẻ • {deck.creatorUsername || 'Bạn'}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -162,6 +183,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   sectionTitle: {
     fontSize: 20,
@@ -229,9 +255,15 @@ const styles = StyleSheet.create({
   recentIcon: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
+  },
+  recentAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginRight: 16,
   },
   recentInfo: {

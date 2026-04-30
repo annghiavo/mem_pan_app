@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, Alert, ActivityIndicator, Platform, Linking, Modal, TextInput, Appearance, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, Alert, ActivityIndicator, Platform, Linking, Modal, TextInput, Appearance, useColorScheme, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar } from '../../services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function SettingsScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const colorScheme = useColorScheme();
   const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
 
@@ -60,12 +63,53 @@ export default function SettingsScreen() {
     try {
       setLoading(true);
       const data = await getCurrentUser();
-      setUser(data.user || data.data || data); // Handle potentially different API response shapes
+      const userData = data.user || data.data || data;
+      setUser(userData);
+      if (userData?.avatarUrl) {
+        setAvatarUrl(userData.avatarUrl);
+      }
     } catch (error) {
       console.error('Failed to fetch user', error);
       // If we fail to fetch the user (e.g. not logged in), we should handle it gracefully
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền truy cập', 'Cần quyền truy cập thư viện ảnh để thay đổi ảnh đại diện.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const mimeType = asset.mimeType || 'image/jpeg';
+      const fileName = asset.fileName || `avatar_${Date.now()}.jpg`;
+
+      setUploadingAvatar(true);
+      const response = await uploadAvatar(uri, mimeType, fileName);
+      const newUrl = response.avatarUrl || response.url || response.avatar_url;
+      if (newUrl) {
+        setAvatarUrl(newUrl);
+      }
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện!');
+    } catch (error: any) {
+      console.error('Avatar upload error', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải lên ảnh đại diện.');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -173,6 +217,28 @@ export default function SettingsScreen() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.7}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.avatarInitial}>{(user?.username || 'U').charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={[styles.avatarOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)' }]}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="camera" size={20} color="#ffffff" />
+                )}
+              </View>
+            </TouchableOpacity>
+            <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
+            <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
+          </View>
+
           <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Thông tin cá nhân</Text>
           <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
             {renderSettingItem('Tên người dùng', user?.username || 'Người dùng', () => { })}
@@ -396,6 +462,52 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  avatarWrapper: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 12,
+  },
+  avatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  avatarPlaceholder: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    color: '#ffffff',
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  avatarEmail: {
+    fontSize: 14,
+    marginTop: 4,
   },
   fullScreenModal: { flex: 1, backgroundColor: '#f8f9fa', paddingTop: 50 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },

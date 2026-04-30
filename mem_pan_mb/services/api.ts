@@ -78,6 +78,42 @@ export const changePassword = (oldPassword: string, newPassword: string) => {
   });
 };
 
+export const uploadAvatar = async (uri: string, mimeType: string, fileName: string) => {
+  if (!authToken) {
+    authToken = await AsyncStorage.getItem('authToken') || '';
+    currentRefreshToken = await AsyncStorage.getItem('refreshToken') || '';
+  }
+
+  const formData = new FormData();
+  formData.append('avatar', {
+    uri,
+    type: mimeType,
+    name: fileName,
+  } as any);
+
+  const response = await fetch(`${API_URL}/users/me/avatar`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+    },
+    body: formData,
+  });
+
+  const responseText = await response.text();
+  let data;
+  try {
+    data = responseText ? JSON.parse(responseText) : {};
+  } catch (e) {
+    throw new Error(`Invalid JSON response: ${responseText}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Avatar upload failed');
+  }
+
+  return data;
+};
+
 // --- Decks ---
 export const getDecks = (page = 1, pageSize = 20) => {
   return request(`/decks?page=${page}&pageSize=${pageSize}`);
