@@ -28,7 +28,7 @@ export default function TabLayout() {
     checkAuth();
   }, []);
 
-  if (isAuthenticated === null) {
+  if (isAuthenticated === null || isAuthenticated === false) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#111111' : '#f8f9fa' }}>
         <ActivityIndicator size="large" color="#5865F2" />

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1';let authToken = '';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1'; let authToken = '';
 let currentRefreshToken = '';
 
 export const setAuthToken = async (token: string) => {
@@ -53,6 +53,14 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      await clearAuth();
+      try {
+        const { router } = require('expo-router');
+        router.replace('/(auth)/login');
+      } catch (err) {}
+      return {};
+    }
     throw new Error(data.message || 'API request failed');
   }
 
@@ -108,6 +116,14 @@ export const uploadAvatar = async (uri: string, mimeType: string, fileName: stri
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      await clearAuth();
+      try {
+        const { router } = require('expo-router');
+        router.replace('/(auth)/login');
+      } catch (err) {}
+      return {};
+    }
     throw new Error(data.message || 'Avatar upload failed');
   }
 
@@ -280,4 +296,50 @@ export const reviewCard = (sessionId: string, cardId: string, rating: number, du
     method: 'POST',
     body: JSON.stringify({ cardId, rating, durationMs }),
   });
+};
+
+// --- Import ---
+export const parseImportFile = async (uri: string, mimeType: string, fileName: string, fileType: 'csv' | 'tsv' | 'pdf') => {
+  if (!authToken) {
+    authToken = (await AsyncStorage.getItem('authToken')) || '';
+    currentRefreshToken = (await AsyncStorage.getItem('refreshToken')) || '';
+  }
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri,
+    type: mimeType,
+    name: fileName,
+  } as any);
+  formData.append('file_type', fileType);
+
+  const response = await fetch(`${API_URL}/import/parse`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: formData,
+  });
+
+  const responseText = await response.text();
+  let data;
+  try {
+    data = responseText ? JSON.parse(responseText) : {};
+  } catch (e) {
+    throw new Error(`Invalid JSON response: ${responseText}`);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      await clearAuth();
+      try {
+        const { router } = require('expo-router');
+        router.replace('/(auth)/login');
+      } catch (err) {}
+      return {};
+    }
+    throw new Error(data.message || 'File parse failed');
+  }
+
+  return data;
 };

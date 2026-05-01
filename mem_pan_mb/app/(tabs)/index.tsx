@@ -28,7 +28,7 @@ export default function HomeScreen() {
       try {
         const res = await getRecentDecks();
         if (res.decks && res.decks.length > 0) {
-          const deckDetailsPromises = res.decks.slice(0, 5).map(async (d: any) => {
+          const deckDetailsPromises = res.decks.slice(0, 8).map(async (d: any) => {
             try {
               const deckRes = await getDeck(d.deckId);
               const progressRes = await getDeckProgress(d.deckId).catch(() => null);
@@ -64,10 +64,7 @@ export default function HomeScreen() {
     fetchUser();
   }, []);
 
-  const continueDeck = recentDecks.length > 0 ? recentDecks[0] : null;
-  const continueProgressPercent = continueDeck && continueDeck.progress?.totalCount > 0
-    ? Math.round((continueDeck.progress.memorizedCount / continueDeck.progress.totalCount) * 100)
-    : 0;
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -88,46 +85,57 @@ export default function HomeScreen() {
         </View>
 
         {/* Học tiếp (Continue Learning) */}
-        {continueDeck ? (
+        {recentDecks.length > 0 ? (
           <>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Học tiếp</Text>
-            <TouchableOpacity style={[styles.continueCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${continueDeck.deckId}` as any)}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>{continueDeck.name}</Text>
-                <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
-              </View>
-              <View style={styles.progressContainer}>
-                <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                  <View style={[styles.progressBarFill, { width: `${continueProgressPercent}%` }]} />
-                </View>
-              </View>
-              <Text style={[styles.progressText, { color: theme.textMuted }]}>Đã hoàn thành {continueProgressPercent}% số thẻ</Text>
-              <TouchableOpacity style={styles.continueButton} onPress={() => router.push(`/module/${continueDeck.deckId}` as any)}>
-                <Text style={styles.continueButtonText}>Tiếp tục</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {recentDecks.slice(0, 5).map((continueDeck, idx) => {
+                const continueProgressPercent = continueDeck.progress?.totalCount > 0
+                  ? Math.round((continueDeck.progress.memorizedCount / continueDeck.progress.totalCount) * 100)
+                  : 0;
+                return (
+                  <TouchableOpacity key={`continue-${idx}`} style={[styles.continueCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${continueDeck.deckId}` as any)}>
+                    <View style={styles.cardHeader}>
+                      <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>{continueDeck.name}</Text>
+                      <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
+                    </View>
+                    <View style={styles.progressContainer}>
+                      <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
+                        <View style={[styles.progressBarFill, { width: `${continueProgressPercent}%` }]} />
+                      </View>
+                    </View>
+                    <Text style={[styles.progressText, { color: theme.textMuted }]}>Đã hoàn thành {continueProgressPercent}% số thẻ</Text>
+                    <TouchableOpacity style={styles.continueButton} onPress={() => router.push(`/module/${continueDeck.deckId}` as any)}>
+                      <Text style={styles.continueButtonText}>Tiếp tục</Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </>
         ) : null}
 
         {/* Gần đây (Recent) */}
-        {recentDecks.length > 1 ? (
+        {recentDecks.length > 5 ? (
           <>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Gần đây</Text>
-            {recentDecks.slice(1).map((deck, idx) => (
-              <TouchableOpacity key={idx} style={[styles.recentItem, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
-                {deck.creatorAvatar ? (
-                  <Image source={{ uri: deck.creatorAvatar }} style={styles.recentAvatarImage} />
-                ) : (
-                  <View style={[styles.recentIcon, { backgroundColor: isDark ? '#115e59' : '#e0f2f1' }]}>
-                    <Text style={{ color: isDark ? '#5eead4' : '#008080', fontWeight: 'bold', fontSize: 16 }}>{(deck.creatorUsername || 'U').charAt(0).toUpperCase()}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {recentDecks.slice(5, 8).map((deck, idx) => (
+                <TouchableOpacity key={`recent-${idx}`} style={[styles.recentItemHorizontal, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                  {deck.creatorAvatar ? (
+                    <Image source={{ uri: deck.creatorAvatar }} style={styles.recentAvatarImage} />
+                  ) : (
+                    <View style={[styles.recentIcon, { backgroundColor: isDark ? '#115e59' : '#e0f2f1' }]}>
+                      <Text style={{ color: isDark ? '#5eead4' : '#008080', fontWeight: 'bold', fontSize: 16 }}>{(deck.creatorUsername || 'U').charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View style={styles.recentInfo}>
+                    <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                    <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{(deck.cardCount || deck.progress?.totalCount || 0)} thẻ • {deck.creatorUsername || 'Bạn'}</Text>
                   </View>
-                )}
-                <View style={styles.recentInfo}>
-                  <Text style={[styles.recentTitle, { color: theme.text }]}>{deck.name}</Text>
-                  <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{(deck.cardCount || deck.progress?.totalCount || 0)} thẻ • {deck.creatorUsername || 'Bạn'}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </>
         ) : null}
 
@@ -195,14 +203,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: 8,
   },
+  horizontalScroll: {
+    paddingRight: 16,
+  },
   continueCard: {
+    width: 280,
+    marginRight: 16,
     borderRadius: 16,
     padding: 20,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -241,12 +254,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  recentItem: {
+  recentItemHorizontal: {
+    width: 260,
+    marginRight: 16,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 12,
+    marginBottom: 16,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,

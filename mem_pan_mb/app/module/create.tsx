@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createDeck, bulkCreateCards } from '../../services/api';
+import { createDeck, bulkCreateCards, parseImportFile } from '../../services/api';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 interface Term {
   id: string;
@@ -12,7 +14,7 @@ interface Term {
 
 export default function CreateModuleScreen() {
   const router = useRouter();
-  
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -66,6 +68,49 @@ export default function CreateModuleScreen() {
     setTerms(terms.map(t => t.id === id ? { ...t, [field]: value } : t));
   };
 
+  const handleImport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/tab-separated-values', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const uri = file.uri;
+      
+      let type: 'csv' | 'tsv' | 'pdf' = 'csv';
+      if (file.name.toLowerCase().endsWith('.pdf')) type = 'pdf';
+      else if (file.name.toLowerCase().endsWith('.tsv')) type = 'tsv';
+      
+      setIsLoading(true);
+      const mimeType = file.mimeType || (type === 'pdf' ? 'application/pdf' : type === 'csv' ? 'text/csv' : 'text/tab-separated-values');
+      
+      const parsedData = await parseImportFile(uri, mimeType, file.name, type);
+      
+      if (parsedData.cards && parsedData.cards.length > 0) {
+        const currentTerms = terms.filter(t => t.term.trim() || t.definition.trim());
+        const newTerms = parsedData.cards.map((card: any, index: number) => ({
+          id: Date.now().toString() + index,
+          term: card.front || '',
+          definition: card.back || ''
+        }));
+        
+        setTerms([...currentTerms, ...newTerms]);
+        Alert.alert('Thành công', `Đã nhập ${parsedData.total || newTerms.length} thẻ`);
+      } else {
+        Alert.alert('Thông báo', 'Không tìm thấy thẻ nào trong tệp');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể nhập tệp');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tiêu đề học phần');
@@ -93,7 +138,7 @@ export default function CreateModuleScreen() {
         langFront: langCodeMap[termLang] || 'en',
         langBack: langCodeMap[defLang] || 'vi',
       }));
-      
+
       await bulkCreateCards(deckId, cardsData);
 
       Alert.alert('Thành công', 'Đã tạo học phần');
@@ -138,7 +183,7 @@ export default function CreateModuleScreen() {
               value={title}
               onChangeText={setTitle}
             />
-            
+
             {showDescription ? (
               <TextInput
                 style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
@@ -150,9 +195,9 @@ export default function CreateModuleScreen() {
               />
             ) : (
               <View style={styles.infoActions}>
-                <TouchableOpacity style={styles.scanDocButton}>
-                  <Ionicons name="scan-outline" size={20} color={theme.primary} />
-                  <Text style={[styles.scanDocText, { color: theme.primary }]}>Quét tài liệu</Text>
+                <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
+                  <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                  <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowDescription(true)}>
                   <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
@@ -183,7 +228,7 @@ export default function CreateModuleScreen() {
               </View>
             ))}
           </View>
-          
+
           <View style={{ height: 100 }} />
         </ScrollView>
 
