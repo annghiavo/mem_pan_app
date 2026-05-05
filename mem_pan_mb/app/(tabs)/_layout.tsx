@@ -1,40 +1,11 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Tabs } from 'expo-router';
+import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform, useColorScheme, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet, Platform, useColorScheme } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        if (token) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-          router.replace('/(auth)/login');
-        }
-      } catch (e) {
-        setIsAuthenticated(false);
-        router.replace('/(auth)/login');
-      }
-    };
-    checkAuth();
-  }, []);
-
-  if (isAuthenticated === null || isAuthenticated === false) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#111111' : '#f8f9fa' }}>
-        <ActivityIndicator size="large" color="#5865F2" />
-      </View>
-    );
-  }
 
   return (
     <Tabs
