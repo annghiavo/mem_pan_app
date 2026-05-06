@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, TextInput, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, TextInput, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeckCards } from '../../services/api';
+import { Audio } from 'expo-av';
+
 
 export default function PracticeTestScreen() {
   const router = useRouter();
@@ -37,6 +39,24 @@ export default function PracticeTestScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [isFinished, setIsFinished] = useState(false);
+
+  async function playSound(type: 'correct' | 'end') {
+    try {
+      const source = type === 'correct' 
+        ? require('../../assets/sounds/correct.mp3') 
+        : require('../../assets/sounds/end.mp3');
+      const { sound } = await Audio.Sound.createAsync(source);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  }
+
 
   // State for current question
   const [currentAnswerText, setCurrentAnswerText] = useState('');
@@ -122,6 +142,11 @@ export default function PracticeTestScreen() {
     setIsCurrentCorrect(isCorrect);
     setHasAnsweredCurrent(true);
 
+    if (isCorrect) {
+      playSound('correct');
+    }
+
+
     const answerRecord = {
       question: q,
       userAnswer: answer,
@@ -152,7 +177,9 @@ export default function PracticeTestScreen() {
       setCurrentAnswerText('');
     } else {
       setIsFinished(true);
+      playSound('end');
     }
+
   };
 
   if (loading) {
@@ -271,6 +298,9 @@ export default function PracticeTestScreen() {
 
       <ScrollView contentContainerStyle={styles.qContent}>
         <Text style={[styles.qLabel, { color: theme.textMuted }]}>Thuật ngữ</Text>
+        {q.card.imageUrl ? (
+          <Image source={{ uri: q.card.imageUrl }} style={styles.qImage} resizeMode="contain" />
+        ) : null}
         <Text style={[styles.qText, { color: theme.text }]}>{q.questionText}</Text>
 
         {q.type === 'tf' ? (
@@ -367,6 +397,7 @@ const styles = StyleSheet.create({
   qContent: { padding: 24, paddingBottom: 40, flexGrow: 1 },
   qLabel: { fontSize: 14, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8 },
   qText: { fontSize: 28, fontWeight: '500', marginBottom: 32 },
+  qImage: { width: '100%', height: 180, marginBottom: 16, borderRadius: 12 },
   tfContainer: { marginBottom: 32, padding: 16, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.02)' },
   tfText: { fontSize: 22, fontWeight: '500', textAlign: 'center' },
   optionsArea: { flex: 1, justifyContent: 'flex-end' },

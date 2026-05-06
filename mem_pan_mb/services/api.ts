@@ -24,26 +24,7 @@ export const clearAuth = async () => {
   await AsyncStorage.removeItem('refreshToken');
 };
 
-const request = async (endpoint: string, options: RequestInit = {}) => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (!authToken) {
-    authToken = await AsyncStorage.getItem('authToken') || '';
-    currentRefreshToken = await AsyncStorage.getItem('refreshToken') || '';
-  }
-
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
-  }
-
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
+const handleResponse = async (response: Response) => {
   const responseText = await response.text();
   let data;
   try {
@@ -65,6 +46,29 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
   }
 
   return data;
+};
+
+const request = async (endpoint: string, options: RequestInit = {}) => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (!authToken) {
+    authToken = await AsyncStorage.getItem('authToken') || '';
+    currentRefreshToken = await AsyncStorage.getItem('refreshToken') || '';
+  }
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  return handleResponse(response);
 };
 
 // --- Auth & Users ---
@@ -107,27 +111,7 @@ export const uploadAvatar = async (uri: string, mimeType: string, fileName: stri
     body: formData,
   });
 
-  const responseText = await response.text();
-  let data;
-  try {
-    data = responseText ? JSON.parse(responseText) : {};
-  } catch (e) {
-    throw new Error(`Invalid JSON response: ${responseText}`);
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      await clearAuth();
-      try {
-        const { router } = require('expo-router');
-        router.replace('/(auth)/login');
-      } catch (err) {}
-      return {};
-    }
-    throw new Error(data.message || 'Avatar upload failed');
-  }
-
-  return data;
+  return handleResponse(response);
 };
 
 // --- Decks ---
@@ -191,17 +175,65 @@ export const getDeckCards = (deckId: string) => {
   return request(`/decks/${deckId}/cards`);
 };
 
-export const createCard = (deckId: string, data: { contentFront: string; contentBack: string; imageUrl?: string; position?: number; langFront?: string; langBack?: string }) => {
-  return request(`/decks/${deckId}/cards`, {
+export const createCard = async (deckId: string, data: { 
+  contentFront: string; 
+  contentBack: string; 
+  image?: { uri: string; type: string; name: string };
+  imageUrl?: string; 
+  position?: number; 
+  langFront?: string; 
+  langBack?: string 
+}) => {
+  if (!authToken) {
+    authToken = (await AsyncStorage.getItem('authToken')) || '';
+    currentRefreshToken = (await AsyncStorage.getItem('refreshToken')) || '';
+  }
+
+  const formData = new FormData();
+  formData.append('content_front', data.contentFront);
+  formData.append('content_back', data.contentBack);
+  if (data.image) {
+    formData.append('image', {
+      uri: data.image.uri,
+      type: data.image.type,
+      name: data.image.name,
+    } as any);
+  }
+  if (data.imageUrl) {
+    formData.append('image_url', data.imageUrl);
+  }
+  if (data.position !== undefined) {
+    formData.append('position', data.position.toString());
+  }
+  if (data.langFront) {
+    formData.append('lang_front', data.langFront);
+  }
+  if (data.langBack) {
+    formData.append('lang_back', data.langBack);
+  }
+
+  const response = await fetch(`${API_URL}/decks/${deckId}/cards`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+    },
+    body: formData,
   });
+
+  return handleResponse(response);
 };
 
 export const bulkCreateCards = (deckId: string, cards: { contentFront: string; contentBack: string; imageUrl?: string; langFront?: string; langBack?: string }[]) => {
+  const formattedCards = cards.map(c => ({
+    content_front: c.contentFront,
+    content_back: c.contentBack,
+    image_url: c.imageUrl,
+    lang_front: c.langFront,
+    lang_back: c.langBack
+  }));
   return request(`/decks/${deckId}/cards/bulk`, {
     method: 'POST',
-    body: JSON.stringify({ cards }),
+    body: JSON.stringify({ cards: formattedCards }),
   });
 };
 
@@ -209,11 +241,61 @@ export const getCard = (cardId: string) => {
   return request(`/cards/${cardId}`);
 };
 
-export const updateCard = (cardId: string, data: { contentFront?: string; contentBack?: string; imageUrl?: string; langFront?: string; langBack?: string }) => {
-  return request(`/cards/${cardId}`, {
+export const updateCard = async (cardId: string, data: {
+  contentFront?: string;
+  contentBack?: string;
+  image?: { uri: string; type: string; name: string };
+  imageUrl?: string;
+  langFront?: string;
+  langBack?: string
+}) => {
+  if (!authToken) {
+    authToken = (await AsyncStorage.getItem('authToken')) || '';
+    currentRefreshToken = (await AsyncStorage.getItem('refreshToken')) || '';
+  }
+
+  // No new image file: send JSON (backend expects JSON for text-only updates)
+  if (!data.image) {
+    const body: Record<string, any> = {};
+    if (data.contentFront !== undefined) body.content_front = data.contentFront;
+    if (data.contentBack !== undefined) body.content_back = data.contentBack;
+    if (data.imageUrl !== undefined) body.image_url = data.imageUrl;
+    if (data.langFront !== undefined) body.lang_front = data.langFront;
+    if (data.langBack !== undefined) body.lang_back = data.langBack;
+
+    const response = await fetch(`${API_URL}/cards/${cardId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+    return handleResponse(response);
+  }
+
+  // New image file provided: send multipart FormData
+  const formData = new FormData();
+  if (data.contentFront) formData.append('content_front', data.contentFront);
+  if (data.contentBack) formData.append('content_back', data.contentBack);
+  formData.append('image', {
+    uri: data.image.uri,
+    type: data.image.type,
+    name: data.image.name,
+  } as any);
+  if (data.imageUrl) formData.append('image_url', data.imageUrl);
+  if (data.langFront) formData.append('lang_front', data.langFront);
+  if (data.langBack) formData.append('lang_back', data.langBack);
+
+  const response = await fetch(`${API_URL}/cards/${cardId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+    },
+    body: formData,
   });
+
+  return handleResponse(response);
 };
 
 export const deleteCard = (cardId: string) => {
@@ -321,25 +403,5 @@ export const parseImportFile = async (uri: string, mimeType: string, fileName: s
     body: formData,
   });
 
-  const responseText = await response.text();
-  let data;
-  try {
-    data = responseText ? JSON.parse(responseText) : {};
-  } catch (e) {
-    throw new Error(`Invalid JSON response: ${responseText}`);
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      await clearAuth();
-      try {
-        const { router } = require('expo-router');
-        router.replace('/(auth)/login');
-      } catch (err) {}
-      return {};
-    }
-    throw new Error(data.message || 'File parse failed');
-  }
-
-  return data;
+  return handleResponse(response);
 };

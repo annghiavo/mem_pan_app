@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
 
 const langNameMap: Record<string, string> = {
   vi: 'Tiếng Việt',
@@ -53,6 +54,14 @@ export default function ModuleDetailScreen() {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [folders, setFolders] = useState<any[]>([]);
+
+  // Card Edit States
+  const [showCardEditModal, setShowCardEditModal] = useState(false);
+  const [editingCard, setEditingCard] = useState<any>(null);
+  const [cardFront, setCardFront] = useState('');
+  const [cardBack, setCardBack] = useState('');
+  const [cardImage, setCardImage] = useState<any>(null);
+  const [isUpdatingCard, setIsUpdatingCard] = useState(false);
 
   useEffect(() => {
     const fetchDeckData = async () => {
@@ -132,6 +141,75 @@ export default function ModuleDetailScreen() {
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể thêm vào thư mục');
     }
+  };
+
+  const handleOpenCardEdit = (card: any) => {
+    setEditingCard(card);
+    setCardFront(card.contentFront);
+    setCardBack(card.contentBack);
+    setCardImage(null);
+    setShowCardEditModal(true);
+  };
+
+  const handlePickCardImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setCardImage({
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: asset.fileName || `card_${Date.now()}.jpg`
+      });
+    }
+  };
+
+  const handleUpdateCard = async () => {
+    if (!cardFront.trim() || !cardBack.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thuật ngữ và định nghĩa');
+      return;
+    }
+
+    setIsUpdatingCard(true);
+    try {
+      const res = await updateCard(editingCard.cardId, {
+        contentFront: cardFront,
+        contentBack: cardBack,
+        image: cardImage || undefined,
+      });
+      
+      // Update local state
+      const updatedCards = cards.map(c => 
+        c.cardId === editingCard.cardId 
+          ? { ...c, ...res.card } 
+          : c
+      );
+      setCards(updatedCards);
+      setShowCardEditModal(false);
+      Alert.alert('Thành công', 'Đã cập nhật thẻ');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật thẻ');
+    } finally {
+      setIsUpdatingCard(false);
+    }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    Alert.alert('Xác nhận', 'Bạn có chắc chắn muốn xóa thẻ này?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa', style: 'destructive', onPress: async () => {
+        try {
+          await deleteCard(cardId);
+          setCards(cards.filter(c => c.cardId !== cardId));
+        } catch (error: any) {
+          Alert.alert('Lỗi', error.message || 'Không thể xóa thẻ');
+        }
+      }}
+    ]);
   };
 
   if (!deckData) {
@@ -255,12 +333,15 @@ export default function ModuleDetailScreen() {
                 ) : null}
                 <Text style={[styles.termWord, { color: theme.text }]}>{item.contentFront}</Text>
               </View>
+              {item.imageUrl ? (
+                <Image source={{ uri: item.imageUrl }} style={styles.termImage} />
+              ) : null}
               <View style={styles.termActions}>
-                <TouchableOpacity style={{ marginRight: 16 }}>
-                  <Ionicons name="volume-medium" size={24} color={theme.textMuted} />
+                <TouchableOpacity style={{ marginRight: 16 }} onPress={() => handleOpenCardEdit(item)}>
+                  <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
                 </TouchableOpacity>
-                <TouchableOpacity>
-                  <Ionicons name="star-outline" size={24} color={theme.textMuted} />
+                <TouchableOpacity onPress={() => handleDeleteCard(item.cardId)}>
+                  <Ionicons name="trash-outline" size={24} color="#ef4444" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -363,6 +444,69 @@ export default function ModuleDetailScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Edit Card Modal */}
+      <Modal visible={showCardEditModal} transparent={true} animationType="slide">
+        <View style={[styles.fullScreenModal, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <TouchableOpacity onPress={() => setShowCardEditModal(false)}>
+              <Text style={[styles.cancelText, { color: theme.textMuted }]}>Hủy</Text>
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Sửa thẻ</Text>
+            <TouchableOpacity onPress={handleUpdateCard} disabled={isUpdatingCard}>
+              {isUpdatingCard ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Text style={styles.saveText}>Lưu</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalBody}>
+            <Text style={[styles.inputLabel, { color: theme.text }]}>Thuật ngữ</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+              value={cardFront}
+              onChangeText={setCardFront}
+              placeholder="Nhập thuật ngữ"
+              placeholderTextColor={theme.textMuted}
+              multiline
+            />
+            <Text style={[styles.inputLabel, { color: theme.text }]}>Định nghĩa</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+              value={cardBack}
+              onChangeText={setCardBack}
+              placeholder="Nhập định nghĩa"
+              placeholderTextColor={theme.textMuted}
+              multiline
+            />
+            
+            <Text style={[styles.inputLabel, { color: theme.text }]}>Hình ảnh</Text>
+            <View style={styles.cardEditImageContainer}>
+              {cardImage ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: cardImage.uri }} style={styles.cardEditImage} />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => setCardImage(null)}>
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ) : editingCard?.imageUrl ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: editingCard.imageUrl }} style={styles.cardEditImage} />
+                  <TouchableOpacity style={styles.changeImageBtn} onPress={handlePickCardImage}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Thay đổi</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={[styles.addImageBtn, { borderColor: theme.border }]} onPress={handlePickCardImage}>
+                  <Ionicons name="image-outline" size={32} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, marginTop: 8 }}>Thêm hình ảnh</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -399,6 +543,7 @@ const styles = StyleSheet.create({
   termCard: { padding: 16, borderRadius: 12, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   termCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   termWord: { fontSize: 18, fontWeight: '500', flex: 1 },
+  termImage: { width: 60, height: 60, borderRadius: 8, marginRight: 12 },
   termActions: { flexDirection: 'row' },
   termDefinition: { fontSize: 16, lineHeight: 24 },
   termLangLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
@@ -416,5 +561,11 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, marginTop: 16 },
   textInput: { padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1 },
   folderSelectItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12 },
-  folderSelectItemText: { flex: 1, fontSize: 16, marginLeft: 16 }
+  folderSelectItemText: { flex: 1, fontSize: 16, marginLeft: 16 },
+  cardEditImageContainer: { marginTop: 8, alignItems: 'center' },
+  cardEditImage: { width: '100%', height: 200, borderRadius: 12 },
+  imagePreviewContainer: { width: '100%', position: 'relative' },
+  removeImageBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: '#fff', borderRadius: 15 },
+  changeImageBtn: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  addImageBtn: { width: '100%', height: 150, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' }
 });

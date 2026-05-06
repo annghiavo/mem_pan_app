@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeckCards } from '../../services/api';
@@ -145,6 +145,9 @@ export default function FlashcardScreen() {
             {cards[currentIndex].langFront ? (
               <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langFront] || cards[currentIndex].langFront}</Text>
             ) : null}
+            {cards[currentIndex].imageUrl ? (
+              <Image source={{ uri: cards[currentIndex].imageUrl }} style={styles.cardImage} resizeMode="contain" />
+            ) : null}
             <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentFront}</Text>
           </Animated.View>
           {/* Back */}
@@ -186,6 +189,7 @@ const styles = StyleSheet.create({
   cardFront: {},
   cardBack: {},
   cardText: { fontSize: 32, fontWeight: '500', textAlign: 'center' },
+  cardImage: { width: '80%', height: '40%', marginBottom: 20, borderRadius: 12 },
   cardLangLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, position: 'absolute', top: 20 },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 40, paddingHorizontal: 20 },
   navButton: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { startStudySession, reviewCard, finishStudySession, getDeckCards } from '../../services/api';
+import { Audio } from 'expo-av';
+
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -41,6 +43,24 @@ export default function QuizScreen() {
   const [isAnswered, setIsAnswered] = useState(false);
   const [cardStartTime, setCardStartTime] = useState<number>(Date.now());
   const [sessionFinished, setSessionFinished] = useState(false);
+
+  async function playSound(type: 'correct' | 'end') {
+    try {
+      const source = type === 'correct' 
+        ? require('../../assets/sounds/correct.mp3') 
+        : require('../../assets/sounds/end.mp3');
+      const { sound } = await Audio.Sound.createAsync(source);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  }
+
 
   useEffect(() => {
     const initSession = async () => {
@@ -107,6 +127,7 @@ export default function QuizScreen() {
 
     let rating = 1; // 1 = Again
     if (isCorrect) {
+      playSound('correct');
       if (durationMs < 3000) {
         rating = 4; // Easy
       } else if (durationMs < 8000) {
@@ -115,6 +136,7 @@ export default function QuizScreen() {
         rating = 2; // Hard
       }
     }
+
 
     try {
       const cardItem = session.cards[currentIndex];
@@ -135,6 +157,8 @@ export default function QuizScreen() {
         setLoading(true);
         await finishStudySession(session.sessionId);
         setSessionFinished(true);
+        playSound('end');
+
       } catch (err) {
         console.error('Error finishing session:', err);
       } finally {
@@ -197,6 +221,9 @@ export default function QuizScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.questionContainer}>
           <Text style={[styles.questionLabel, { color: theme.textMuted }]}>Định nghĩa</Text>
+          {cardContent?.imageUrl ? (
+            <Image source={{ uri: cardContent.imageUrl }} style={styles.questionImage} resizeMode="contain" />
+          ) : null}
           <Text style={[styles.questionText, { color: theme.text }]}>{cardContent?.contentFront}</Text>
         </View>
 
@@ -252,6 +279,7 @@ const styles = StyleSheet.create({
   questionContainer: { marginBottom: 40 },
   questionLabel: { fontSize: 14, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
   questionText: { fontSize: 24, fontWeight: '500', lineHeight: 34 },
+  questionImage: { width: '100%', height: 200, marginBottom: 16, borderRadius: 12 },
   optionsContainer: { flex: 1 },
   optionsLabel: { fontSize: 16, fontWeight: '600', marginBottom: 16 },
   optionCard: { padding: 20, borderRadius: 16, marginBottom: 12, borderWidth: 2 },

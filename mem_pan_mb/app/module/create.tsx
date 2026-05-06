@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createDeck, bulkCreateCards, parseImportFile } from '../../services/api';
+import { createDeck, bulkCreateCards, parseImportFile, createCard } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { Image } from 'react-native';
 
 interface Term {
   id: string;
   term: string;
   definition: string;
+  image?: { uri: string; type: string; name: string };
 }
 
 export default function CreateModuleScreen() {
@@ -66,6 +69,30 @@ export default function CreateModuleScreen() {
 
   const updateTerm = (id: string, field: 'term' | 'definition', value: string) => {
     setTerms(terms.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const pickImage = async (id: string) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setTerms(terms.map(t => t.id === id ? { 
+        ...t, 
+        image: { 
+          uri: asset.uri, 
+          type: asset.mimeType || 'image/jpeg', 
+          name: asset.fileName || `image_${Date.now()}.jpg` 
+        } 
+      } : t));
+    }
+  };
+
+  const removeImage = (id: string) => {
+    setTerms(terms.map(t => t.id === id ? { ...t, image: undefined } : t));
   };
 
   const handleImport = async () => {
@@ -131,15 +158,34 @@ export default function CreateModuleScreen() {
       const deckId = deckRes.deck.deckId;
 
       // 2. Add Cards to Deck
-      const cardsData = validTerms.map(t => ({
-        contentFront: t.term.trim(),
-        contentBack: t.definition.trim(),
-        imageUrl: '',
-        langFront: langCodeMap[termLang] || 'en',
-        langBack: langCodeMap[defLang] || 'vi',
-      }));
+      // If any card has an image, we must use createCard individually (or bulk if supported, but here we use createCard for simplicity and reliability)
+      // For performance, we'll use bulkCreateCards for cards without images, and createCard for those with.
+      
+      const cardsWithImages = validTerms.filter(t => t.image);
+      const cardsWithoutImages = validTerms.filter(t => !t.image);
 
-      await bulkCreateCards(deckId, cardsData);
+      if (cardsWithoutImages.length > 0) {
+        const bulkData = cardsWithoutImages.map(t => ({
+          contentFront: t.term.trim(),
+          contentBack: t.definition.trim(),
+          imageUrl: '',
+          langFront: langCodeMap[termLang] || 'en',
+          langBack: langCodeMap[defLang] || 'vi',
+        }));
+        await bulkCreateCards(deckId, bulkData);
+      }
+
+      if (cardsWithImages.length > 0) {
+        for (const t of cardsWithImages) {
+          await createCard(deckId, {
+            contentFront: t.term.trim(),
+            contentBack: t.definition.trim(),
+            image: t.image,
+            langFront: langCodeMap[termLang] || 'en',
+            langBack: langCodeMap[defLang] || 'vi',
+          });
+        }
+      }
 
       Alert.alert('Thành công', 'Đã tạo học phần');
       router.back();
@@ -210,21 +256,39 @@ export default function CreateModuleScreen() {
           <View style={styles.termsSection}>
             {terms.map((term, index) => (
               <View key={term.id} style={[styles.termCard, { backgroundColor: theme.surface }]}>
-                <TextInput
-                  style={[styles.termInput, { color: theme.text }]}
-                  placeholder="Thuật ngữ"
-                  placeholderTextColor={theme.textMuted}
-                  value={term.term}
-                  onChangeText={(val) => updateTerm(term.id, 'term', val)}
-                />
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
-                <TextInput
-                  style={[styles.termInput, { color: theme.text }]}
-                  placeholder="Định nghĩa"
-                  placeholderTextColor={theme.textMuted}
-                  value={term.definition}
-                  onChangeText={(val) => updateTerm(term.id, 'definition', val)}
-                />
+                <View style={styles.termCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={[styles.termInput, { color: theme.text }]}
+                      placeholder="Thuật ngữ"
+                      placeholderTextColor={theme.textMuted}
+                      value={term.term}
+                      onChangeText={(val) => updateTerm(term.id, 'term', val)}
+                    />
+                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                    <TextInput
+                      style={[styles.termInput, { color: theme.text }]}
+                      placeholder="Định nghĩa"
+                      placeholderTextColor={theme.textMuted}
+                      value={term.definition}
+                      onChangeText={(val) => updateTerm(term.id, 'definition', val)}
+                    />
+                  </View>
+                  <View style={styles.termCardActions}>
+                    {term.image ? (
+                      <View style={styles.imagePreviewContainer}>
+                        <Image source={{ uri: term.image.uri }} style={styles.imagePreview} />
+                        <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
+                          <Ionicons name="close-circle" size={20} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
+                        <Ionicons name="image-outline" size={24} color={theme.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
               </View>
             ))}
           </View>
@@ -350,6 +414,12 @@ const styles = StyleSheet.create({
   addDescText: { fontSize: 16, fontWeight: '600' },
   termsSection: { gap: 16 },
   termCard: { borderRadius: 8, padding: 16, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  termCardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  termCardActions: { marginLeft: 12, alignItems: 'center', justifyContent: 'center' },
+  addImageBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(66, 85, 255, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  imagePreviewContainer: { position: 'relative' },
+  imagePreview: { width: 60, height: 60, borderRadius: 8 },
+  removeImageBtn: { position: 'absolute', top: -10, right: -10, backgroundColor: '#fff', borderRadius: 10 },
   termInput: { fontSize: 16, paddingVertical: 8 },
   divider: { height: 1, marginVertical: 8 },
   fab: { position: 'absolute', bottom: 32, alignSelf: 'center', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },

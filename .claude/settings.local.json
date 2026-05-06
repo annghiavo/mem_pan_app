@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const fs = require\\('fs'\\); const src = fs.readFileSync\\('services/api.ts', 'utf8'\\); console.log\\(src.includes\\('No new image file: send JSON'\\) ? 'FIX OK' : 'FIX NOT APPLIED'\\)\")"
+    ]
+  }
+}
