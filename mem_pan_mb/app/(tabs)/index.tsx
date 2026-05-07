@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks } from '../../services/api';
@@ -21,67 +21,73 @@ export default function HomeScreen() {
   const [studySessions, setStudySessions] = useState<any[]>([]);
   const [recentDecks, setRecentDecks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [username, setUsername] = useState('M');
 
-  React.useEffect(() => {
-    const fetchData = async () => {
-      const studyDeckIds = new Set<string>();
+  const fetchData = useCallback(async () => {
+    const studyDeckIds = new Set<string>();
+    try {
       try {
-        // Fetch study sessions (recently studied decks with progress)
-        try {
-          const res = await getRecentDecks();
-          if (res.decks && res.decks.length > 0) {
-            const sessionPromises = res.decks.slice(0, 5).map(async (d: any) => {
+        const res = await getRecentDecks();
+        if (res.decks && res.decks.length > 0) {
+          const sessionPromises = res.decks.slice(0, 5).map(async (d: any) => {
+            try {
+              const deckRes = await getDeck(d.deckId);
+              const progressRes = await getDeckProgress(d.deckId).catch(() => null);
+              studyDeckIds.add(d.deckId);
+              return {
+                ...d,
+                ...deckRes.deck,
+                creatorUsername: deckRes.creatorUsername || '',
+                creatorAvatar: deckRes.creatorAvatar || '',
+                progress: progressRes
+              };
+            } catch (e) {
+              return null;
+            }
+          });
+          const details = await Promise.all(sessionPromises);
+          setStudySessions(details.filter(d => d !== null));
+        }
+      } catch (error) {
+        console.error('Error fetching study sessions', error);
+      }
+
+      try {
+        const res = await getDecks(1, 6);
+        if (res.decks && res.decks.length > 0) {
+          const enriched = await Promise.all(
+            res.decks.slice(0, 6).map(async (d: any) => {
               try {
                 const deckRes = await getDeck(d.deckId);
-                const progressRes = await getDeckProgress(d.deckId).catch(() => null);
-                studyDeckIds.add(d.deckId);
                 return {
                   ...d,
                   ...deckRes.deck,
                   creatorUsername: deckRes.creatorUsername || '',
-                  creatorAvatar: deckRes.creatorAvatar || '',
-                  progress: progressRes
                 };
               } catch (e) {
-                return null;
+                return d;
               }
-            });
-            const details = await Promise.all(sessionPromises);
-            setStudySessions(details.filter(d => d !== null));
-          }
-        } catch (error) {
-          console.error('Error fetching study sessions', error);
+            })
+          );
+          setRecentDecks(enriched);
         }
-
-        // Fetch recent decks from library with creator info
-        try {
-          const res = await getDecks(1, 6);
-          if (res.decks && res.decks.length > 0) {
-            const enriched = await Promise.all(
-              res.decks.slice(0, 6).map(async (d: any) => {
-                try {
-                  const deckRes = await getDeck(d.deckId);
-                  return {
-                    ...d,
-                    ...deckRes.deck,
-                    creatorUsername: deckRes.creatorUsername || '',
-                  };
-                } catch (e) {
-                  return d;
-                }
-              })
-            );
-            setRecentDecks(enriched);
-          }
-        } catch (error) {
-          console.error('Error fetching recent decks', error);
-        }
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching recent decks', error);
       }
-    };
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, [fetchData]);
+
+  React.useEffect(() => {
     fetchData();
     const fetchUser = async () => {
       try {
@@ -92,13 +98,18 @@ export default function HomeScreen() {
       } catch (e) {}
     };
     fetchUser();
-  }, []);
+  }, [fetchData]);
 
 
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={[styles.searchContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, TextInput, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getDeckCards } from '../../services/api';
+import { getDeckCards, getDeckStudySettings } from '../../services/api';
+import { checkAnswer } from '../../utils/learningLogic';
+import { defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
 
 
@@ -35,6 +37,7 @@ export default function PracticeTestScreen() {
   };
 
   const [loading, setLoading] = useState(true);
+  const [strictnessLevel, setStrictnessLevel] = useState<'flexible' | 'strict'>(defaultStudySettings.strictnessLevel);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
@@ -67,7 +70,13 @@ export default function PracticeTestScreen() {
   useEffect(() => {
     const initTest = async () => {
       try {
-        const res = await getDeckCards(deckId);
+        const [res, settingsRes] = await Promise.all([
+          getDeckCards(deckId),
+          getDeckStudySettings(deckId).catch(() => null),
+        ]);
+        if (settingsRes?.settings?.strictnessLevel) {
+          setStrictnessLevel(settingsRes.settings.strictnessLevel);
+        }
         const cards = res.cards || [];
         
         if (cards.length === 0) {
@@ -136,7 +145,9 @@ export default function PracticeTestScreen() {
     if (hasAnsweredCurrent) return;
 
     const q = questions[currentIndex];
-    const isCorrect = q.correctAnswer.toLowerCase().trim() === answer.toLowerCase().trim();
+    const isCorrect = q.type === 'w'
+      ? checkAnswer(q, answer, strictnessLevel)
+      : q.correctAnswer.toLowerCase().trim() === answer.toLowerCase().trim();
 
     setSelectedOption(answer);
     setIsCurrentCorrect(isCorrect);

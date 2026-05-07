@@ -380,6 +380,34 @@ export const reviewCard = (sessionId: string, cardId: string, rating: number, du
   });
 };
 
+export const getDeckStudySettings = (deckId: string) => {
+  return request(`/study/decks/${deckId}/settings`);
+};
+
+export const updateDeckStudySettings = (deckId: string, settings: {
+  shuffleTerms: boolean;
+  textToSpeech: boolean;
+  answerWithTerm: boolean;
+  answerWithDefinition: boolean;
+  questionTypeFlashcards: boolean;
+  questionTypeMultipleChoice: boolean;
+  questionTypeWritten: boolean;
+  strictnessLevel: string;
+  requireRetypingCorrectAnswer: boolean;
+}) => {
+  return request(`/study/decks/${deckId}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings }),
+  });
+};
+
+export const checkAnswerAPI = (deckId: string, userAnswer: string, correctAnswer: string) => {
+  return request(`/study/decks/${deckId}/check-answer`, {
+    method: 'POST',
+    body: JSON.stringify({ deckId, userAnswer, correctAnswer }),
+  });
+};
+
 // --- Import ---
 export const parseImportFile = async (uri: string, mimeType: string, fileName: string, fileType: 'csv' | 'tsv' | 'pdf') => {
   if (!authToken) {

@@ -187,9 +187,67 @@ export function generateQuestions(
 
 /**
  * Check whether a user's answer is correct for a question.
+ * strictness='flexible'  → case-insensitive, strips punctuation, Levenshtein tolerance
+ * strictness='strict'    → case-insensitive exact match, all other chars must match
  */
-export function checkAnswer(question: Question, userAnswer: string): boolean {
-  return question.correctAnswer.toLowerCase().trim() === userAnswer.toLowerCase().trim();
+export function checkAnswer(
+  question: Question,
+  userAnswer: string,
+  strictness: 'flexible' | 'strict' = 'flexible',
+): boolean {
+  const correct = question.correctAnswer;
+  if (strictness === 'strict') {
+    return correct.toLowerCase().trim() === userAnswer.toLowerCase().trim();
+  }
+  return checkFlexible(userAnswer, correct);
+}
+
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, '') // strip punctuation (unicode-aware)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshteinThreshold(n: number): number {
+  if (n >= 9) return 2;
+  if (n >= 5) return 1;
+  return 0;
+}
+
+function levenshtein(a: string, b: string): number {
+  const la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  let prev = Array.from({ length: lb + 1 }, (_, i) => i);
+  for (let i = 1; i <= la; i++) {
+    const curr: number[] = [i];
+    for (let j = 1; j <= lb; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[lb];
+}
+
+export function checkWrittenAnswer(
+  userAnswer: string,
+  correctAnswer: string,
+  strictness: 'flexible' | 'strict',
+): boolean {
+  if (strictness === 'strict') {
+    return correctAnswer.toLowerCase().trim() === userAnswer.toLowerCase().trim();
+  }
+  return checkFlexible(userAnswer, correctAnswer);
+}
+
+function checkFlexible(userAnswer: string, correctAnswer: string): boolean {
+  const na = normalize(userAnswer);
+  const nb = normalize(correctAnswer);
+  if (na === nb) return true;
+  return levenshtein(na, nb) <= levenshteinThreshold(nb.length);
 }
 
 // ─── Result calculation ──────────────────────────────────────────────────────

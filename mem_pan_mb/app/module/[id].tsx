@@ -76,7 +76,7 @@ export default function ModuleDetailScreen() {
         setCreatorUsername(deckRes.creatorUsername || '');
         setCreatorAvatar(deckRes.creatorAvatar || '');
         setCards(cardsRes.cards || []);
-        setProgress(progressRes || { newCount: cardsRes.cards?.length || 0, studyingCount: 0, memorizedCount: 0 });
+        setProgress(progressRes);
         setDueCount(dueRes?.total || 0);
       } catch (error) {
         console.error('Error fetching deck:', error);
@@ -295,27 +295,27 @@ export default function ModuleDetailScreen() {
           Số thẻ cần ôn hiện tại: <Text style={{fontWeight: 'bold', color: '#f59e0b'}}>{dueCount}</Text> thẻ
         </Text>
         <View style={styles.progressStats}>
-          <View style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)} disabled={cards.length === 0}>
             <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
-              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount ?? 0}</Text>
             </View>
             <Text style={[styles.statLabel, { color: theme.text }]}>Chưa học</Text>
-            <Ionicons name="arrow-forward" size={20} color={theme.textMuted} />
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+            <Ionicons name="arrow-forward" size={20} color="#5865F2" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)} disabled={cards.length === 0}>
             <View style={[styles.statRing, { borderColor: '#f59e0b', borderRightColor: isDark ? '#3f3f46' : '#f3f4f6' }]}>
-              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.studyingCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.learnCount ?? 0}</Text>
             </View>
             <Text style={[styles.statLabel, { color: theme.text }]}>Đang học</Text>
-            <Ionicons name="arrow-forward" size={20} color={theme.textMuted} />
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }, { opacity: (progress?.memorizedCount || 0) > 0 ? 1 : 0.5 }]}>
+            <Ionicons name="arrow-forward" size={20} color="#f59e0b" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => router.push(`/quiz/${id}?filterState=memorized` as any)} disabled={(progress?.memorizedCount ?? 0) === 0}>
             <View style={[styles.statRing, { borderColor: '#10b981' }]}>
-              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.memorizedCount || 0}</Text>
+              <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.memorizedCount ?? 0}</Text>
             </View>
             <Text style={[styles.statLabel, { color: theme.text }]}>Thành thạo</Text>
-            <Ionicons name="arrow-forward" size={20} color={theme.textMuted} />
-          </View>
+            <Ionicons name="arrow-forward" size={20} color="#10b981" />
+          </TouchableOpacity>
         </View>
 
         {/* Terms List */}
@@ -567,5 +567,5 @@ const styles = StyleSheet.create({
   imagePreviewContainer: { width: '100%', position: 'relative' },
   removeImageBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: '#fff', borderRadius: 15 },
   changeImageBtn: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  addImageBtn: { width: '100%', height: 150, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' }
+  addImageBtn: { width: '100%', height: 150, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
 });
