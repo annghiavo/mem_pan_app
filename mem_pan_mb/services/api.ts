@@ -408,6 +408,19 @@ export const checkAnswerAPI = (deckId: string, userAnswer: string, correctAnswer
   });
 };
 
+// --- Stats ---
+export const getUserStats = () => request('/stats/me');
+
+export const getUserHeatmap = (fromDate?: string, toDate?: string) => {
+  const params = new URLSearchParams();
+  if (fromDate) params.set('from_date', fromDate);
+  if (toDate) params.set('to_date', toDate);
+  const q = params.toString() ? `?${params}` : '';
+  return request(`/stats/me/heatmap${q}`);
+};
+
+export const getUserDeckStats = () => request('/stats/me/decks');
+
 // --- Import ---
 export const parseImportFile = async (uri: string, mimeType: string, fileName: string, fileType: 'csv' | 'tsv' | 'pdf') => {
   if (!authToken) {
