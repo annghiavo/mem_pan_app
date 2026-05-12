@@ -8,7 +8,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   const theme = {
     background: isDark ? '#111111' : '#f8f9fa',
     surface: isDark ? '#1c1c1e' : '#ffffff',
@@ -95,7 +95,7 @@ export default function HomeScreen() {
         const u = data.user || data.data || data;
         if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
         if (u?.username) setUsername(u.username);
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchUser();
   }, [fetchData]);
@@ -116,7 +116,7 @@ export default function HomeScreen() {
             <Ionicons name="search" size={20} color={theme.textMuted} />
             <TextInput placeholder="Tìm kiếm" placeholderTextColor={theme.textMuted} style={[styles.searchInput, { color: theme.text }]} />
           </View>
-          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(settings)' as any)}>
+          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(profile)' as any)}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
             ) : (
