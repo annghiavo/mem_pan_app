@@ -1,38 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
   ScrollView, useColorScheme, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getUserStats, getUserHeatmap, getUserDeckStats } from '../../services/api';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface UserStatsData {
-  total_cards: number;
-  total_reviews: number;
-  total_study_time_ms: number;
-  current_streak: number;
-  longest_streak: number;
-  total_correct: number;
-  total_incorrect: number;
+  totalCards: number;
+  totalReviews: number;
+  totalStudyTimeMs: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalCorrect: number;
+  totalIncorrect: number;
 }
 
 interface HeatmapEntry {
-  study_date: string;
-  reviews_count: number;
+  studyDate: string;
+  reviewsCount: number;
 }
 
 interface DeckStatData {
-  deck_id: string;
-  deck_name: string;
-  total_cards: number;
-  new_cards: number;
-  learning_cards: number;
-  review_cards: number;
-  mastered_cards: number;
-  due_today: number;
+  deckId: string;
+  deckName: string;
+  totalCards: number;
+  newCards: number;
+  learningCards: number;
+  reviewCards: number;
+  masteredCards: number;
+  dueToday: number;
 }
 
 type HeatCell = { date: string; count: number; isFuture: boolean };
@@ -61,7 +61,7 @@ const NUM_WEEKS = 53;
 
 const buildGrid = (entries: HeatmapEntry[]): HeatCell[][] => {
   const map = new Map<string, number>();
-  for (const e of entries) map.set(e.study_date, e.reviews_count);
+  for (const e of entries) map.set(e.studyDate, e.reviewsCount);
 
   const today = new Date();
   const todayStr = toLocalDateStr(today);
@@ -126,26 +126,26 @@ const DeckRow = ({
 }: {
   deck: DeckStatData; theme: ReturnType<typeof buildTheme>;
 }) => {
-  const total = deck.total_cards;
+  const total = deck.totalCards;
   return (
     <View style={[styles.deckRow, { borderTopColor: theme.border }]}>
       <View style={styles.deckHeader}>
         <Text style={[styles.deckName, { color: theme.text }]} numberOfLines={1}>
-          {deck.deck_name}
+          {deck.deckName}
         </Text>
-        {deck.due_today > 0 && (
+        {deck.dueToday > 0 && (
           <View style={styles.dueBadge}>
-            <Text style={styles.dueBadgeText}>{deck.due_today} cần ôn</Text>
+            <Text style={styles.dueBadgeText}>{deck.dueToday} cần ôn</Text>
           </View>
         )}
       </View>
 
       {total > 0 ? (
         <View style={styles.progressBar}>
-          <View style={{ flex: deck.new_cards,      backgroundColor: '#3b82f6' }} />
-          <View style={{ flex: deck.learning_cards,  backgroundColor: '#f59e0b' }} />
-          <View style={{ flex: deck.review_cards,    backgroundColor: '#10b981' }} />
-          <View style={{ flex: deck.mastered_cards,  backgroundColor: '#8b5cf6' }} />
+          <View style={{ flex: deck.newCards,       backgroundColor: '#3b82f6' }} />
+          <View style={{ flex: deck.learningCards,  backgroundColor: '#f59e0b' }} />
+          <View style={{ flex: deck.reviewCards,    backgroundColor: '#10b981' }} />
+          <View style={{ flex: deck.masteredCards,  backgroundColor: '#8b5cf6' }} />
         </View>
       ) : (
         <View style={[styles.progressBar, { backgroundColor: theme.border }]} />
@@ -153,10 +153,10 @@ const DeckRow = ({
 
       <View style={styles.deckLegend}>
         {[
-          { color: '#3b82f6', label: `${deck.new_cards} mới` },
-          { color: '#f59e0b', label: `${deck.learning_cards} học` },
-          { color: '#10b981', label: `${deck.review_cards} ôn` },
-          { color: '#8b5cf6', label: `${deck.mastered_cards} thuần` },
+          { color: '#3b82f6', label: `${deck.newCards} mới` },
+          { color: '#f59e0b', label: `${deck.learningCards} học` },
+          { color: '#10b981', label: `${deck.reviewCards} ôn` },
+          { color: '#8b5cf6', label: `${deck.masteredCards} thuần` },
         ].map(({ color, label }) => (
           <View key={label} style={styles.legendDot}>
             <View style={[styles.dot, { backgroundColor: color }]} />
@@ -192,33 +192,44 @@ export default function AchievementsScreen() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
 
-  useEffect(() => { fetchAll(); }, []);
+  useFocusEffect(useCallback(() => { fetchAll(); }, []));
 
   const fetchAll = async () => {
     try {
       setLoading(true);
       setError(false);
-      const today       = toLocalDateStr(new Date());
-      const oneYearAgo  = toLocalDateStr(new Date(Date.now() - 365 * 86_400_000));
+      const today      = toLocalDateStr(new Date());
+      const oneYearAgo = toLocalDateStr(new Date(Date.now() - 365 * 86_400_000));
 
-      const [sRes, hRes, dRes] = await Promise.all([
+      const [sRes, hRes, dRes] = await Promise.allSettled([
         getUserStats(),
         getUserHeatmap(oneYearAgo, today),
         getUserDeckStats(),
       ]);
 
-      setStats(sRes.stats ?? sRes);
-      setGrid(buildGrid((hRes.entries ?? []) as HeatmapEntry[]));
-      setDecks((dRes.decks ?? []) as DeckStatData[]);
-    } catch {
+      const allFailed = [sRes, hRes, dRes].every(r => r.status === 'rejected');
+      if (allFailed) { setError(true); return; }
+
+      if (sRes.status === 'fulfilled') {
+        const s = sRes.value;
+        setStats(s.stats ?? s);
+      }
+      if (hRes.status === 'fulfilled') {
+        setGrid(buildGrid((hRes.value.entries ?? []) as HeatmapEntry[]));
+      }
+      if (dRes.status === 'fulfilled') {
+        setDecks((dRes.value.decks ?? []) as DeckStatData[]);
+      }
+    } catch (e) {
+      console.error('[Achievements] fetchAll error:', e);
       setError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const accuracy = stats && stats.total_reviews > 0
-    ? Math.round((stats.total_correct / stats.total_reviews) * 100)
+  const accuracy = stats && stats.totalReviews > 0
+    ? Math.round((stats.totalCorrect / stats.totalReviews) * 100)
     : null;
 
   const monthLabels = grid.length > 0 ? buildMonthLabels(grid) : [];
@@ -256,14 +267,14 @@ export default function AchievementsScreen() {
             <View style={styles.streakMain}>
               <Text style={styles.streakFire}>🔥</Text>
               <Text style={[styles.streakCount, { color: theme.text }]}>
-                {stats?.current_streak ?? 0}
+                {stats?.currentStreak ?? 0}
               </Text>
               <Text style={[styles.streakUnit, { color: theme.textMuted }]}>ngày liên tiếp</Text>
             </View>
             <View style={[styles.streakSep, { backgroundColor: theme.border }]} />
             <View style={styles.streakBest}>
               <Text style={[styles.streakBestVal, { color: theme.text }]}>
-                {stats?.longest_streak ?? 0}
+                {stats?.longestStreak ?? 0}
               </Text>
               <Text style={[styles.streakBestLabel, { color: theme.textMuted }]}>dài nhất</Text>
             </View>
@@ -271,9 +282,9 @@ export default function AchievementsScreen() {
 
           {/* Stats grid */}
           <View style={styles.statsGrid}>
-            <StatCard icon="library-outline"          iconColor="#3b82f6" value={String(stats?.total_reviews ?? 0)}                           label="Lần ôn tập"    theme={theme} isDark={isDark} />
-            <StatCard icon="layers-outline"            iconColor="#8b5cf6" value={String(stats?.total_cards ?? 0)}                            label="Thẻ đã tạo"    theme={theme} isDark={isDark} />
-            <StatCard icon="time-outline"              iconColor="#f59e0b" value={stats ? formatStudyTime(stats.total_study_time_ms) : '0p'}  label="Thời gian học" theme={theme} isDark={isDark} />
+            <StatCard icon="library-outline"          iconColor="#3b82f6" value={String(stats?.totalReviews ?? 0)}                           label="Lần ôn tập"    theme={theme} isDark={isDark} />
+            <StatCard icon="layers-outline"            iconColor="#8b5cf6" value={String(stats?.totalCards ?? 0)}                             label="Thẻ đã tạo"    theme={theme} isDark={isDark} />
+            <StatCard icon="time-outline"              iconColor="#f59e0b" value={stats ? formatStudyTime(stats.totalStudyTimeMs) : '0p'}     label="Thời gian học" theme={theme} isDark={isDark} />
             <StatCard icon="checkmark-circle-outline"  iconColor="#10b981" value={accuracy !== null ? `${accuracy}%` : '–'}                  label="Độ chính xác"  theme={theme} isDark={isDark} />
           </View>
 
@@ -331,7 +342,7 @@ export default function AchievementsScreen() {
             <View style={[styles.section, { backgroundColor: theme.surface }]}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>Tiến độ bộ thẻ</Text>
               {decks.map((deck) => (
-                <DeckRow key={deck.deck_id} deck={deck} theme={theme} />
+                <DeckRow key={deck.deckId} deck={deck} theme={theme} />
               ))}
             </View>
           )}

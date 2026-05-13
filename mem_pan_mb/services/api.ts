@@ -160,7 +160,7 @@ export const getPublicDecks = (page = 1, pageSize = 20) => {
 };
 
 export const getDeckStats = (deckId: string) => {
-  return request(`/decks/${deckId}/stats`);
+  return request(`/stats/decks/${deckId}`);
 };
 
 export const cloneDeck = (deckId: string) => {
@@ -413,8 +413,8 @@ export const getUserStats = () => request('/stats/me');
 
 export const getUserHeatmap = (fromDate?: string, toDate?: string) => {
   const params = new URLSearchParams();
-  if (fromDate) params.set('from_date', fromDate);
-  if (toDate) params.set('to_date', toDate);
+  if (fromDate) params.set('fromDate', fromDate);
+  if (toDate) params.set('toDate', toDate);
   const q = params.toString() ? `?${params}` : '';
   return request(`/stats/me/heatmap${q}`);
 };
