@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView,
   ActivityIndicator, useColorScheme, Image, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import {
   startStudySession, reviewCard, finishStudySession,
   getDeckCards, getDeckProgress, getDeckStudySettings,
@@ -102,7 +102,7 @@ export default function QuizScreen() {
   const isFilteredMode = !!filterStateParam;
   const filterLabel = filterStateParam === 'new' ? 'Chưa học'
     : filterStateParam === 'studying' ? 'Đang học'
-    : filterStateParam === 'memorized' ? 'Thành thạo' : '';
+      : filterStateParam === 'memorized' ? 'Thành thạo' : '';
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -179,68 +179,87 @@ export default function QuizScreen() {
       sound.setOnPlaybackStatusUpdate(status => {
         if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
       });
-    } catch {}
+    } catch { }
   }
 
   // ─── Init ─────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const [cardsRes, settingsRes] = await Promise.all([
-          getDeckCards(deckId),
-          getDeckStudySettings(deckId).catch(() => null),
-        ]);
+  const initSession = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cardsRes, settingsRes] = await Promise.all([
+        getDeckCards(deckId),
+        getDeckStudySettings(deckId).catch(() => null),
+      ]);
 
-        const cards: any[] = cardsRes.cards || [];
-        const map: Record<string, any> = {};
-        cards.forEach((c: any) => { map[c.cardId] = c; });
+      const cards: any[] = cardsRes.cards || [];
+      const map: Record<string, any> = {};
+      cards.forEach((c: any) => { map[c.cardId] = c; });
 
-        const loadedSettings = settingsRes?.settings
-          ? mergeSettings(settingsRes.settings)
-          : defaultStudySettings;
+      const loadedSettings = settingsRes?.settings
+        ? mergeSettings(settingsRes.settings)
+        : defaultStudySettings;
 
-        setSettings(loadedSettings);
-        settingsRef.current = loadedSettings;
-        cardsMapRef.current = map;
-        allCardsRef.current = cards;
+      setSettings(loadedSettings);
+      settingsRef.current = loadedSettings;
+      cardsMapRef.current = map;
+      allCardsRef.current = cards;
 
-        let cardIds: string[];
+      let cardIds: string[];
 
-        if (filterStateParam) {
-          const tagLabel = filterStateParam === 'studying' ? 'learning' : filterStateParam;
-          const progressRes = await getDeckProgress(deckId).catch(() => null);
-          const tag = progressRes?.tags?.find((t: any) => t.label === tagLabel);
-          const ids = new Set<string>(tag?.cardIds ?? []);
-          let filtered = cards.filter((c: any) => ids.has(c.cardId));
-          if (loadedSettings.shuffleTerms) filtered.sort(() => Math.random() - 0.5);
-          cardIds = filtered.map((c: any) => c.cardId);
-        } else {
-          const sessionRes = await startStudySession(deckId, 10, 20);
-          sessionIdRef.current = sessionRes.session?.sessionId ?? null;
-          const rawCards = sessionRes.session?.cards ?? [];
-          const shuffled = loadedSettings.shuffleTerms
-            ? [...rawCards].sort(() => Math.random() - 0.5)
-            : rawCards;
-          cardIds = shuffled.map((c: any) => c.cardId);
-        }
-
-        setTotalCards(cardIds.length);
-
-        const batchSize = getRandomBatchSize(cardIds.length);
-        const firstBatchIds = cardIds.slice(0, batchSize);
-        const remaining = cardIds.slice(batchSize);
-
-        setCurrentBatch(buildRoundQuestions(firstBatchIds, map, cards, loadedSettings));
-        setPendingPool(remaining);
-      } catch (err) {
-        console.error('Quiz init error:', err);
-      } finally {
-        setLoading(false);
+      if (filterStateParam) {
+        const tagLabel = filterStateParam === 'studying' ? 'learning' : filterStateParam;
+        const progressRes = await getDeckProgress(deckId).catch(() => null);
+        const tag = progressRes?.tags?.find((t: any) => t.label === tagLabel);
+        const ids = new Set<string>(tag?.cardIds ?? []);
+        let filtered = cards.filter((c: any) => ids.has(c.cardId));
+        if (loadedSettings.shuffleTerms) filtered.sort(() => Math.random() - 0.5);
+        cardIds = filtered.map((c: any) => c.cardId);
+      } else {
+        const sessionRes = await startStudySession(deckId, 10, 20);
+        sessionIdRef.current = sessionRes.session?.sessionId ?? null;
+        const rawCards = sessionRes.session?.cards ?? [];
+        const shuffled = loadedSettings.shuffleTerms
+          ? [...rawCards].sort(() => Math.random() - 0.5)
+          : rawCards;
+        cardIds = shuffled.map((c: any) => c.cardId);
       }
-    };
-    if (deckId) init();
-  }, [deckId]);
+
+      setTotalCards(cardIds.length);
+
+      const batchSize = getRandomBatchSize(cardIds.length);
+      const firstBatchIds = cardIds.slice(0, batchSize);
+      const remaining = cardIds.slice(batchSize);
+
+      setCurrentBatch(buildRoundQuestions(firstBatchIds, map, cards, loadedSettings));
+      setPendingPool(remaining);
+    } catch (err) {
+      console.error('Quiz init error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [deckId, filterStateParam]);
+
+  useEffect(() => {
+    if (deckId) initSession();
+  }, [initSession]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const checkSettings = async () => {
+        try {
+          const res = await getDeckStudySettings(deckId).catch(() => null);
+          if (res?.settings) {
+            const newSettings = mergeSettings(res.settings);
+            if (JSON.stringify(newSettings) !== JSON.stringify(settingsRef.current)) {
+              initSession();
+            }
+          }
+        } catch (err) { }
+      };
+      if (deckId && !loading) checkSettings();
+    }, [deckId, loading, initSession])
+  );
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
@@ -257,7 +276,7 @@ export default function QuizScreen() {
     if (isFilteredMode || !sessionIdRef.current || !currentQuestion) return;
     const durationMs = Date.now() - cardStartTime;
     const rating = !correct ? 1 : durationMs < 3000 ? 4 : durationMs < 8000 ? 3 : 2;
-    try { await reviewCard(sessionIdRef.current, currentQuestion.cardId, rating, durationMs); } catch {}
+    try { await reviewCard(sessionIdRef.current, currentQuestion.cardId, rating, durationMs); } catch { }
   };
 
   // advanceToNext reads batchIndex/currentBatch from render closure.
@@ -288,7 +307,7 @@ export default function QuizScreen() {
 
     if (newPool.length === 0) {
       if (!isFilteredMode && sessionIdRef.current) {
-        try { await finishStudySession(sessionIdRef.current); } catch {}
+        try { await finishStudySession(sessionIdRef.current); } catch { }
       }
       playSound('end');
       setSessionFinished(true);

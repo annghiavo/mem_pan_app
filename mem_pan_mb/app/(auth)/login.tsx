@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [sendingReset, setSendingReset] = useState(false);
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -76,6 +79,25 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email của bạn.');
+      return;
+    }
+    try {
+      setSendingReset(true);
+      const { forgotPassword } = await import('../../services/api');
+      await forgotPassword(forgotEmail.trim());
+      setShowForgotModal(false);
+      setForgotEmail('');
+      Alert.alert('Đã gửi', 'Vui lòng kiểm tra email để nhận liên kết đặt lại mật khẩu.');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể gửi email. Vui lòng thử lại.');
+    } finally {
+      setSendingReset(false);
+    }
+  };
+
   const isFormValid = identifier.length > 0 && password.length > 0;
 
   return (
@@ -140,7 +162,7 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.forgotPasswordButton}>
+          <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => setShowForgotModal(true)}>
             <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>Quên mật khẩu</Text>
           </TouchableOpacity>
 
@@ -152,6 +174,40 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      {/* Forgot Password Modal */}
+      <Modal visible={showForgotModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: theme.background }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Quên mật khẩu</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.textMuted }]}>
+              Nhập email để nhận liên kết đặt lại mật khẩu.
+            </Text>
+            <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Email của bạn"
+                placeholderTextColor={theme.textMuted}
+                value={forgotEmail}
+                onChangeText={setForgotEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.loginButton, { marginTop: 12 }]}
+              onPress={handleForgotPassword}
+              disabled={sendingReset}
+            >
+              {sendingReset
+                ? <ActivityIndicator color="#ffffff" />
+                : <Text style={styles.loginButtonText}>Gửi liên kết</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => { setShowForgotModal(false); setForgotEmail(''); }}>
+              <Text style={[styles.forgotPasswordText, { color: theme.textMuted }]}>Hủy</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -223,5 +279,26 @@ const styles = StyleSheet.create({
   registerLinkText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalBox: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 8,
   },
 });

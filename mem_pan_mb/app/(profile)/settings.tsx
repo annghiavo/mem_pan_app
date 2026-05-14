@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar } from '../../services/api';
+import messaging from '@react-native-firebase/messaging';
+import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar, registerDeviceToken, unregisterDeviceToken } from '../../services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -38,7 +39,61 @@ export default function SettingsScreen() {
   useEffect(() => {
     fetchUser();
     loadTheme();
+    loadPreferences();
   }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const pushPref = await AsyncStorage.getItem('pushNotificationsEnabled');
+      if (pushPref !== null) setPushNotifications(pushPref === 'true');
+
+      const soundPref = await AsyncStorage.getItem('soundEffectsEnabled');
+      if (soundPref !== null) setSoundEffects(soundPref === 'true');
+    } catch (e) {}
+  };
+
+  const handlePushNotificationsToggle = async (value: boolean) => {
+    if (value) {
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+      if (!enabled) {
+        Alert.alert('Cần cấp quyền', 'Vui lòng bật thông báo trong cài đặt điện thoại.');
+        return;
+      }
+
+      try {
+        const token = await messaging().getToken();
+        await registerDeviceToken(token, Platform.OS);
+        await AsyncStorage.setItem('fcmToken', token);
+        await AsyncStorage.setItem('pushNotificationsEnabled', 'true');
+        setPushNotifications(true);
+      } catch (e) {
+        Alert.alert('Lỗi', 'Không thể đăng ký thông báo.');
+      }
+    } else {
+      try {
+        const token = await AsyncStorage.getItem('fcmToken');
+        if (token) {
+          await unregisterDeviceToken(token);
+          await AsyncStorage.removeItem('fcmToken');
+        }
+        await AsyncStorage.setItem('pushNotificationsEnabled', 'false');
+        setPushNotifications(false);
+      } catch (e) {
+        Alert.alert('Lỗi', 'Không thể tắt thông báo.');
+      }
+    }
+  };
+
+  const handleSoundEffectsToggle = async (value: boolean) => {
+    setSoundEffects(value);
+    try {
+      await AsyncStorage.setItem('soundEffectsEnabled', value ? 'true' : 'false');
+    } catch (e) {}
+  };
 
   const loadTheme = async () => {
     try {
@@ -242,7 +297,7 @@ export default function SettingsScreen() {
           <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Thông tin cá nhân</Text>
           <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
             {renderSettingItem('Tên người dùng', user?.username || 'Người dùng', () => { })}
-            {renderSettingItem('Email', user?.email || 'Chưa cập nhật', () => { })}
+            {renderSettingItem('Email', user?.email || 'Chưa cập nhật')}
             {renderSettingItem('Đổi mật khẩu', undefined, () => setShowPasswordModal(true))}
           </View>
 
@@ -253,8 +308,8 @@ export default function SettingsScreen() {
 
           <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Ưu tiên</Text>
           <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {renderSettingItem('Thông báo đẩy', undefined, undefined, true, pushNotifications, setPushNotifications)}
-            {renderSettingItem('Hiệu ứng âm thanh', undefined, undefined, true, soundEffects, setSoundEffects)}
+            {renderSettingItem('Thông báo đẩy', undefined, undefined, true, pushNotifications, handlePushNotificationsToggle)}
+            {renderSettingItem('Hiệu ứng âm thanh', undefined, undefined, true, soundEffects, handleSoundEffectsToggle)}
           </View>
 
           <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Dự án</Text>

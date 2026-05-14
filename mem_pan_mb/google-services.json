@@ -1,0 +1,29 @@
+{
+    "project_info": {
+        "project_number": "272885252422",
+        "project_id": "mempan-cac51",
+        "storage_bucket": "mempan-cac51.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:272885252422:android:4724c4f2efd160b74ba547",
+                "android_client_info": {
+                    "package_name": "com.mempan.app"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyCg1AoSBIj24dBQ9wjMU8ZyIHqzhEbn4iE"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

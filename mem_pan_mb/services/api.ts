@@ -72,6 +72,13 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 };
 
 // --- Auth & Users ---
+export const forgotPassword = (email: string) => {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+};
+
 export const logoutUser = (refreshToken: string) => {
   return request('/auth/logout', {
     method: 'POST',
@@ -420,6 +427,20 @@ export const getUserHeatmap = (fromDate?: string, toDate?: string) => {
 };
 
 export const getUserDeckStats = () => request('/stats/me/decks');
+
+// --- Notifications ---
+export const registerDeviceToken = (token: string, deviceName: string = '') => {
+  return request('/notifications/devices', {
+    method: 'POST',
+    body: JSON.stringify({ token, device_name: deviceName }),
+  });
+};
+
+export const unregisterDeviceToken = (token: string) => {
+  return request(`/notifications/devices/${encodeURIComponent(token)}`, {
+    method: 'DELETE',
+  });
+};
 
 // --- Import ---
 export const parseImportFile = async (uri: string, mimeType: string, fileName: string, fileType: 'csv' | 'tsv' | 'pdf') => {

@@ -82,7 +82,7 @@ export default function QuizSettingsScreen() {
     setSaving(true);
     try {
       await updateDeckStudySettings(deckId, settings);
-      router.replace(`/quiz/${deckId}` as any);
+      router.back();
     } catch (err) {
       Alert.alert('Lỗi', 'Không thể lưu cài đặt. Vui lòng thử lại.');
       console.error('Save error:', err);
