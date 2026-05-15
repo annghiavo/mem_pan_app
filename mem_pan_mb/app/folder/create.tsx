@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Acti
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createFolder } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 export default function CreateFolderScreen() {
   const router = useRouter();
@@ -44,37 +45,39 @@ export default function CreateFolderScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: theme.cancelBg }]}>
-          <Text style={[styles.cancelText, { color: theme.cancelText }]}>Hủy</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          onPress={handleCreate} 
-          style={[styles.createButton, { backgroundColor: theme.primary }, !folderName.trim() && { backgroundColor: theme.disabledBtn }]}
-          disabled={!folderName.trim() || isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <Text style={styles.createText}>Tạo</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="folder-outline" size={48} color={theme.iconColor} />
+      <WebContainer maxWidth={720}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: theme.cancelBg }]}>
+            <Text style={[styles.cancelText, { color: theme.cancelText }]}>Hủy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleCreate}
+            style={[styles.createButton, { backgroundColor: theme.primary }, !folderName.trim() && { backgroundColor: theme.disabledBtn }]}
+            disabled={!folderName.trim() || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.createText}>Tạo</Text>
+            )}
+          </TouchableOpacity>
         </View>
-        <TextInput
-          style={[styles.input, { color: theme.text, borderBottomColor: theme.border }]}
-          placeholder="Thư mục chưa đặt tên"
-          placeholderTextColor={theme.textMuted}
-          value={folderName}
-          onChangeText={setFolderName}
-          autoFocus
-          textAlign="center"
-        />
-      </View>
+
+        <View style={styles.content}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="folder-outline" size={48} color={theme.iconColor} />
+          </View>
+          <TextInput
+            style={[styles.input, { color: theme.text, borderBottomColor: theme.border }]}
+            placeholder="Thư mục chưa đặt tên"
+            placeholderTextColor={theme.textMuted}
+            value={folderName}
+            onChangeText={setFolderName}
+            autoFocus
+            textAlign="center"
+          />
+        </View>
+      </WebContainer>
     </SafeAreaView>
   );
 }

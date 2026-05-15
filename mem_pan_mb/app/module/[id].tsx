@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
+import { ReportSheet } from '../../components/ui/ReportSheet';
 
 const langNameMap: Record<string, string> = {
   vi: 'Tiếng Việt',
@@ -27,7 +28,7 @@ export default function ModuleDetailScreen() {
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   const theme = {
     background: isDark ? '#111111' : '#f8f9fa',
     surface: isDark ? '#1c1c1e' : '#ffffff',
@@ -49,6 +50,7 @@ export default function ModuleDetailScreen() {
 
   // Modal States
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFolderSelectModal, setShowFolderSelectModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -98,15 +100,17 @@ export default function ModuleDetailScreen() {
   const handleDeleteDeck = async () => {
     Alert.alert('Xác nhận', 'Bạn có chắc chắn muốn xóa học phần này?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Xóa', style: 'destructive', onPress: async () => {
-        try {
-          await deleteDeck(id as string);
-          setShowOptionsModal(false);
-          router.replace('/(tabs)/library' as any);
-        } catch (error: any) {
-          Alert.alert('Lỗi', error.message || 'Không thể xóa học phần');
+      {
+        text: 'Xóa', style: 'destructive', onPress: async () => {
+          try {
+            await deleteDeck(id as string);
+            setShowOptionsModal(false);
+            router.replace('/(tabs)/library' as any);
+          } catch (error: any) {
+            Alert.alert('Lỗi', error.message || 'Không thể xóa học phần');
+          }
         }
-      }}
+      }
     ]);
   };
 
@@ -181,11 +185,11 @@ export default function ModuleDetailScreen() {
         contentBack: cardBack,
         image: cardImage || undefined,
       });
-      
+
       // Update local state
-      const updatedCards = cards.map(c => 
-        c.cardId === editingCard.cardId 
-          ? { ...c, ...res.card } 
+      const updatedCards = cards.map(c =>
+        c.cardId === editingCard.cardId
+          ? { ...c, ...res.card }
           : c
       );
       setCards(updatedCards);
@@ -201,14 +205,16 @@ export default function ModuleDetailScreen() {
   const handleDeleteCard = async (cardId: string) => {
     Alert.alert('Xác nhận', 'Bạn có chắc chắn muốn xóa thẻ này?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Xóa', style: 'destructive', onPress: async () => {
-        try {
-          await deleteCard(cardId);
-          setCards(cards.filter(c => c.cardId !== cardId));
-        } catch (error: any) {
-          Alert.alert('Lỗi', error.message || 'Không thể xóa thẻ');
+      {
+        text: 'Xóa', style: 'destructive', onPress: async () => {
+          try {
+            await deleteCard(cardId);
+            setCards(cards.filter(c => c.cardId !== cardId));
+          } catch (error: any) {
+            Alert.alert('Lỗi', error.message || 'Không thể xóa thẻ');
+          }
         }
-      }}
+      }
     ]);
   };
 
@@ -243,8 +249,8 @@ export default function ModuleDetailScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Flashcard Preview */}
         {cards.length > 0 ? (
-          <TouchableOpacity 
-            style={[styles.flashcardPreview, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} 
+          <TouchableOpacity
+            style={[styles.flashcardPreview, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
             onPress={() => router.push(`/flashcard/${id}` as any)}
           >
             <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
@@ -259,7 +265,7 @@ export default function ModuleDetailScreen() {
         {/* Module Info */}
         <Text style={[styles.moduleTitle, { color: theme.text }]}>{deckData.name}</Text>
         {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted }]}>{deckData.description}</Text> : null}
-        
+
         <View style={styles.authorContainer}>
           {creatorAvatar ? (
             <Image source={{ uri: creatorAvatar }} style={styles.authorAvatarImage} />
@@ -292,7 +298,7 @@ export default function ModuleDetailScreen() {
         {/* Progress */}
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Tiến độ của bạn</Text>
         <Text style={[styles.progressDesc, { color: theme.textMuted }]}>
-          Số thẻ cần ôn hiện tại: <Text style={{fontWeight: 'bold', color: '#f59e0b'}}>{dueCount}</Text> thẻ
+          Số thẻ cần ôn hiện tại: <Text style={{ fontWeight: 'bold', color: '#f59e0b' }}>{dueCount}</Text> thẻ
         </Text>
         <View style={styles.progressStats}>
           <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)} disabled={cards.length === 0}>
@@ -323,7 +329,7 @@ export default function ModuleDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Thuật ngữ ({cards.length})</Text>
           <Text style={[styles.sortText, { color: theme.textMuted }]}>Thứ tự gốc <Ionicons name="filter" size={14} /></Text>
         </View>
-        
+
         {cards.map((item) => (
           <View key={item.cardId} style={[styles.termCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
             <View style={styles.termCardHeader}>
@@ -351,7 +357,7 @@ export default function ModuleDetailScreen() {
             <Text style={[styles.termDefinition, { color: theme.textMuted }]}>{item.contentBack}</Text>
           </View>
         ))}
-        
+
         <View style={{ height: 40 }} />
       </ScrollView>
 
@@ -376,6 +382,13 @@ export default function ModuleDetailScreen() {
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]}>
               <Ionicons name="share-social-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Chia sẻ</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => {
+              setShowOptionsModal(false);
+              setShowReportSheet(true);
+            }}>
+              <Ionicons name="flag-outline" size={24} color="#ef4444" />
+              <Text style={[styles.optionText, { color: '#ef4444' }]}>Báo cáo học phần này</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleDeleteDeck}>
               <Ionicons name="trash-outline" size={24} color="#ef4444" />
@@ -480,7 +493,7 @@ export default function ModuleDetailScreen() {
               placeholderTextColor={theme.textMuted}
               multiline
             />
-            
+
             <Text style={[styles.inputLabel, { color: theme.text }]}>Hình ảnh</Text>
             <View style={styles.cardEditImageContainer}>
               {cardImage ? (
@@ -507,6 +520,13 @@ export default function ModuleDetailScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <ReportSheet
+        visible={showReportSheet}
+        onClose={() => setShowReportSheet(false)}
+        targetType="deck"
+        targetId={id as string}
+      />
     </SafeAreaView>
   );
 }

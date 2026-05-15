@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -66,6 +67,7 @@ export default function RegisterScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <WebContainer maxWidth={480} paddingHorizontal={0}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={28} color="#212529" />
@@ -138,8 +140,8 @@ export default function RegisterScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity 
-              style={[styles.registerButton, !isFormValid && styles.registerButtonDisabled]} 
+            <TouchableOpacity
+              style={[styles.registerButton, !isFormValid && styles.registerButtonDisabled]}
               onPress={handleRegister}
               disabled={!isFormValid || loading}
             >
@@ -152,6 +154,7 @@ export default function RegisterScreen() {
               )}
             </TouchableOpacity>
           </View>
+          </WebContainer>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { adminApi } from "./client";
 import type { Report } from "../types/admin";
 
 export interface ListReportsParams {
@@ -13,7 +13,7 @@ export interface ListReportsResponse {
 }
 
 export const listReports = (params: ListReportsParams) =>
-  apiClient
+  adminApi
     .get<ListReportsResponse>("/v1/admin/reports", { params })
     .then((r) => r.data);
 
@@ -24,6 +24,6 @@ export interface ProcessReportPayload {
 }
 
 export const processReport = (reportId: string, body: ProcessReportPayload) =>
-  apiClient
+  adminApi
     .patch<{ report: Report }>(`/v1/admin/reports/${reportId}`, body)
     .then((r) => r.data.report);

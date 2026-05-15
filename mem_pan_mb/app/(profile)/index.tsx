@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Act
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentUser } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -57,13 +58,15 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-                <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Hồ sơ</Text>
-                <View style={{ width: 24 }} />
-            </View>
+            <WebContainer maxWidth={720}>
+                <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+                    <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Hồ sơ</Text>
+                    <View style={{ width: 24 }} />
+                </View>
+            </WebContainer>
 
             {loading ? (
                 <View style={styles.loadingContainer}>
@@ -71,25 +74,27 @@ export default function ProfileScreen() {
                 </View>
             ) : (
                 <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                    {/* Avatar Section */}
-                    <View style={styles.avatarSection}>
-                        <View style={styles.avatarWrapper}>
-                            {user?.avatarUrl ? (
-                                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                            ) : (
-                                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
-                                    <Text style={styles.avatarInitial}>{(user?.username || 'U').charAt(0).toUpperCase()}</Text>
-                                </View>
-                            )}
+                    <WebContainer maxWidth={720} paddingHorizontal={0}>
+                        {/* Avatar Section */}
+                        <View style={styles.avatarSection}>
+                            <View style={styles.avatarWrapper}>
+                                {user?.avatarUrl ? (
+                                    <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                                ) : (
+                                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
+                                        <Text style={styles.avatarInitial}>{(user?.username || 'U').charAt(0).toUpperCase()}</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
+                            <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
                         </View>
-                        <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
-                        <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
-                    </View>
 
-                    <View style={styles.menuContainer}>
-                        {renderMenuItem('Thành tựu', 'trophy-outline', () => router.push('/(profile)/achievements' as any))}
-                        {renderMenuItem('Cài đặt', 'settings-outline', () => router.push('/(profile)/settings' as any))}
-                    </View>
+                        <View style={styles.menuContainer}>
+                            {renderMenuItem('Thành tựu', 'trophy-outline', () => router.push('/(profile)/achievements' as any))}
+                            {renderMenuItem('Cài đặt', 'settings-outline', () => router.push('/(profile)/settings' as any))}
+                        </View>
+                    </WebContainer>
                 </ScrollView>
             )}
         </SafeAreaView>

@@ -12,6 +12,7 @@ import {
 import { StudySettings, defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
 import { checkWrittenAnswer } from '../../utils/learningLogic';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -408,6 +409,7 @@ export default function QuizScreen() {
     const hasMore = wrongInRound.length > 0 || pendingPool.length > 0;
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <WebContainer maxWidth={720}>
         <View style={styles.summaryContainer}>
           <Text style={[styles.summaryTitle, { color: theme.text }]}>Vòng {roundNumber} hoàn tất</Text>
 
@@ -448,6 +450,7 @@ export default function QuizScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        </WebContainer>
       </SafeAreaView>
     );
   }
@@ -496,30 +499,33 @@ export default function QuizScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: screenBg }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="close" size={28} color={theme.iconColor} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          {filterLabel ? `${filterLabel}  ` : ''}
-          {'Vòng '}{roundNumber}{'  ·  '}{batchIndex + 1}{'/'}{currentBatch.length}
-        </Text>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => router.push(`/quiz-settings/${deckId}` as any)}
-        >
-          <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={900}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="close" size={28} color={theme.iconColor} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            {filterLabel ? `${filterLabel}  ` : ''}
+            {'Vòng '}{roundNumber}{'  ·  '}{batchIndex + 1}{'/'}{currentBatch.length}
+          </Text>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push(`/quiz-settings/${deckId}` as any)}
+          >
+            <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
+          </TouchableOpacity>
+        </View>
 
-      {/* Progress */}
-      <View style={[styles.progressBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
-        <View style={[styles.progressFill, { width: `${(batchIndex / currentBatch.length) * 100}%` }]} />
-      </View>
+        {/* Progress */}
+        <View style={[styles.progressBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
+          <View style={[styles.progressFill, { width: `${(batchIndex / currentBatch.length) * 100}%` }]} />
+        </View>
+      </WebContainer>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <WebContainer maxWidth={900} paddingHorizontal={0}>
           {/* Badge */}
           <View style={[styles.badge, {
             backgroundColor: isMC
@@ -645,13 +651,16 @@ export default function QuizScreen() {
               )}
             </View>
           )}
+          </WebContainer>
         </ScrollView>
 
         {/* Footer */}
         {showFooter && footerNode ? (
-          <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.borderLight }]}>
-            {footerNode}
-          </View>
+          <WebContainer maxWidth={900} paddingHorizontal={0}>
+            <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.borderLight }]}>
+              {footerNode}
+            </View>
+          </WebContainer>
         ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>

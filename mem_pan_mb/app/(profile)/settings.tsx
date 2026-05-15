@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, Alert, ActivityIndicator, Platform, Linking, Modal, TextInput, Appearance, useColorScheme, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Platform, Linking, Modal, TextInput, Appearance, useColorScheme, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import messaging from '@react-native-firebase/messaging';
 import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar, registerDeviceToken, unregisterDeviceToken } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
+import { showAlert, showConfirm } from '../../utils/alert';
+
+// Firebase messaging is not available on web
+let messaging: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    messaging = require('@react-native-firebase/messaging').default;
+  } catch (e) {
+    console.warn('Firebase messaging not available');
+  }
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -49,10 +60,14 @@ export default function SettingsScreen() {
 
       const soundPref = await AsyncStorage.getItem('soundEffectsEnabled');
       if (soundPref !== null) setSoundEffects(soundPref === 'true');
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handlePushNotificationsToggle = async (value: boolean) => {
+    if (Platform.OS === 'web' || !messaging) {
+      showAlert('Không hỗ trợ', 'Thông báo đẩy chỉ hoạt động trên ứng dụng di động.');
+      return;
+    }
     if (value) {
       const authStatus = await messaging().requestPermission();
       const enabled =
@@ -60,7 +75,7 @@ export default function SettingsScreen() {
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
       if (!enabled) {
-        Alert.alert('Cần cấp quyền', 'Vui lòng bật thông báo trong cài đặt điện thoại.');
+        showAlert('Cần cấp quyền', 'Vui lòng bật thông báo trong cài đặt điện thoại.');
         return;
       }
 
@@ -71,7 +86,7 @@ export default function SettingsScreen() {
         await AsyncStorage.setItem('pushNotificationsEnabled', 'true');
         setPushNotifications(true);
       } catch (e) {
-        Alert.alert('Lỗi', 'Không thể đăng ký thông báo.');
+        showAlert('Lỗi', 'Không thể đăng ký thông báo.');
       }
     } else {
       try {
@@ -83,7 +98,7 @@ export default function SettingsScreen() {
         await AsyncStorage.setItem('pushNotificationsEnabled', 'false');
         setPushNotifications(false);
       } catch (e) {
-        Alert.alert('Lỗi', 'Không thể tắt thông báo.');
+        showAlert('Lỗi', 'Không thể tắt thông báo.');
       }
     }
   };
@@ -92,7 +107,7 @@ export default function SettingsScreen() {
     setSoundEffects(value);
     try {
       await AsyncStorage.setItem('soundEffectsEnabled', value ? 'true' : 'false');
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const loadTheme = async () => {
@@ -135,7 +150,7 @@ export default function SettingsScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Quyền truy cập', 'Cần quyền truy cập thư viện ảnh để thay đổi ảnh đại diện.');
+        showAlert('Quyền truy cập', 'Cần quyền truy cập thư viện ảnh để thay đổi ảnh đại diện.');
         return;
       }
 
@@ -159,74 +174,65 @@ export default function SettingsScreen() {
       if (newUrl) {
         setAvatarUrl(newUrl);
       }
-      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện!');
+      showAlert('Thành công', 'Đã cập nhật ảnh đại diện!');
     } catch (error: any) {
       console.error('Avatar upload error', error);
-      Alert.alert('Lỗi', error.message || 'Không thể tải lên ảnh đại diện.');
+      showAlert('Lỗi', error.message || 'Không thể tải lên ảnh đại diện.');
     } finally {
       setUploadingAvatar(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert(
+    showConfirm(
       "Đăng xuất",
       "Bạn có chắc chắn muốn đăng xuất?",
-      [
-        {
-          text: "Hủy",
-          style: "cancel"
-        },
-        {
-          text: "Đăng xuất",
-          onPress: async () => {
-            try {
-              setLoggingOut(true);
-              const refreshToken = getRefreshToken();
-              if (refreshToken) {
-                await logoutUser(refreshToken);
-              }
-            } catch (error) {
-              console.error('Logout error', error);
-            } finally {
-              clearAuth();
-              setLoggingOut(false);
-              Alert.alert('Thành công', 'Đăng xuất thành công!');
-              router.replace('/(auth)/login');
-            }
-          },
-          style: 'destructive'
+      async () => {
+        try {
+          setLoggingOut(true);
+          const refreshToken = getRefreshToken();
+          if (refreshToken) {
+            await logoutUser(refreshToken);
+          }
+        } catch (error) {
+          console.error('Logout error', error);
+        } finally {
+          await clearAuth();
+          setLoggingOut(false);
+          showAlert('Thành công', 'Đăng xuất thành công!', () => router.replace('/(auth)/login'));
+          if (Platform.OS !== 'web') router.replace('/(auth)/login');
         }
-      ]
+      },
+      "Đăng xuất",
+      "Hủy"
     );
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showConfirm(
       "Xóa tài khoản",
       "Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa tài khoản vĩnh viễn?",
-      [
-        { text: "Hủy", style: "cancel" },
-        { text: "Xóa", onPress: () => console.log("Delete account requested"), style: "destructive" }
-      ]
+      () => console.log("Delete account requested"),
+      "Xóa",
+      "Hủy"
     );
   };
 
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới');
+      showAlert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới');
       return;
     }
 
     try {
       setChangingPassword(true);
       await changePassword(oldPassword, newPassword);
-      Alert.alert('Thành công', 'Đổi mật khẩu thành công!');
+      showAlert('Thành công', 'Đổi mật khẩu thành công!');
       setShowPasswordModal(false);
       setOldPassword('');
       setNewPassword('');
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Không thể đổi mật khẩu');
+      showAlert('Lỗi', error.message || 'Không thể đổi mật khẩu');
     } finally {
       setChangingPassword(false);
     }
@@ -258,13 +264,15 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Cài đặt</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <WebContainer maxWidth={720}>
+        <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+          <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Cài đặt</Text>
+          <View style={{ width: 24 }} />
+        </View>
+      </WebContainer>
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -272,77 +280,79 @@ export default function SettingsScreen() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Avatar Section */}
-          <View style={styles.avatarSection}>
-            <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.7}>
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
-                  <Text style={styles.avatarInitial}>{(user?.username || 'U').charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={[styles.avatarOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)' }]}>
-                {uploadingAvatar ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
+          <WebContainer maxWidth={720} paddingHorizontal={0}>
+            {/* Avatar Section */}
+            <View style={styles.avatarSection}>
+              <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.7}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
                 ) : (
-                  <Ionicons name="camera" size={20} color="#ffffff" />
+                  <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.avatarInitial}>{(user?.username || 'U').charAt(0).toUpperCase()}</Text>
+                  </View>
                 )}
-              </View>
-            </TouchableOpacity>
-            <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
-            <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
-          </View>
-
-          <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Thông tin cá nhân</Text>
-          <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {renderSettingItem('Tên người dùng', user?.username || 'Người dùng', () => { })}
-            {renderSettingItem('Email', user?.email || 'Chưa cập nhật')}
-            {renderSettingItem('Đổi mật khẩu', undefined, () => setShowPasswordModal(true))}
-          </View>
-
-          <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Giao diện</Text>
-          <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {renderSettingItem('Chế độ tối (Dark Mode)', undefined, undefined, true, isDarkMode, toggleDarkMode)}
-          </View>
-
-          <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Ưu tiên</Text>
-          <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {renderSettingItem('Thông báo đẩy', undefined, undefined, true, pushNotifications, handlePushNotificationsToggle)}
-            {renderSettingItem('Hiệu ứng âm thanh', undefined, undefined, true, soundEffects, handleSoundEffectsToggle)}
-          </View>
-
-          <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Dự án</Text>
-          <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {renderSettingItem('Mã nguồn trên GitHub', undefined, () => {
-              Linking.openURL('https://github.com/anprovip/mem_pan_app');
-            })}
-          </View>
-
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity
-              style={[styles.logoutButton, { backgroundColor: isDark ? '#27272a' : '#f3f4f6' }]}
-              onPress={handleLogout}
-              disabled={loggingOut}
-            >
-              {loggingOut ? (
-                <ActivityIndicator color={theme.text} />
-              ) : (
-                <Text style={[styles.logoutButtonText, { color: theme.text }]}>Đăng xuất</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-              <Text style={styles.deleteButtonText}>Xóa tài khoản</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.versionContainer}>
-            <View style={styles.logoContainer}>
-              <Text style={styles.logoText}>Q</Text>
+                <View style={[styles.avatarOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)' }]}>
+                  {uploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Ionicons name="camera" size={20} color="#ffffff" />
+                  )}
+                </View>
+              </TouchableOpacity>
+              <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
+              <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
             </View>
-            <Text style={[styles.versionText, { color: theme.textMuted }]}>v10.32</Text>
-          </View>
+
+            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Thông tin cá nhân</Text>
+            <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {renderSettingItem('Tên người dùng', user?.username || 'Người dùng', () => { })}
+              {renderSettingItem('Email', user?.email || 'Chưa cập nhật')}
+              {renderSettingItem('Đổi mật khẩu', undefined, () => setShowPasswordModal(true))}
+            </View>
+
+            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Giao diện</Text>
+            <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {renderSettingItem('Chế độ tối (Dark Mode)', undefined, undefined, true, isDarkMode, toggleDarkMode)}
+            </View>
+
+            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Ưu tiên</Text>
+            <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {renderSettingItem('Thông báo đẩy', undefined, undefined, true, pushNotifications, handlePushNotificationsToggle)}
+              {renderSettingItem('Hiệu ứng âm thanh', undefined, undefined, true, soundEffects, handleSoundEffectsToggle)}
+            </View>
+
+            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Dự án</Text>
+            <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {renderSettingItem('Mã nguồn trên GitHub', undefined, () => {
+                Linking.openURL('https://github.com/anprovip/mem_pan_app');
+              })}
+            </View>
+
+            <View style={styles.actionsContainer}>
+              <TouchableOpacity
+                style={[styles.logoutButton, { backgroundColor: isDark ? '#27272a' : '#f3f4f6' }]}
+                onPress={handleLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? (
+                  <ActivityIndicator color={theme.text} />
+                ) : (
+                  <Text style={[styles.logoutButtonText, { color: theme.text }]}>Đăng xuất</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+                <Text style={styles.deleteButtonText}>Xóa tài khoản</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.versionContainer}>
+              <View style={styles.logoContainer}>
+                <Text style={styles.logoText}>Q</Text>
+              </View>
+              <Text style={[styles.versionText, { color: theme.textMuted }]}>v10.32</Text>
+            </View>
+          </WebContainer>
         </ScrollView>
       )}
 

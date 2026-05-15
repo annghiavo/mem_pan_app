@@ -7,6 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'react-native';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 interface Term {
   id: string;
@@ -200,26 +201,29 @@ export default function CreateModuleScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
-          <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
-            <Ionicons name="close" size={24} color={theme.iconColor} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Tạo học phần</Text>
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => setIsSettingsVisible(true)} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
-              <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
+        <WebContainer>
+          <View style={[styles.header, { backgroundColor: theme.background }]}>
+            <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
+              <Ionicons name="close" size={24} color={theme.iconColor} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleSave} style={[styles.iconButton, { backgroundColor: theme.iconBg }]} disabled={isLoading}>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={theme.iconColor} />
-              ) : (
-                <Ionicons name="checkmark" size={24} color={theme.iconColor} />
-              )}
-            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Tạo học phần</Text>
+            <View style={styles.headerRight}>
+              <TouchableOpacity onPress={() => setIsSettingsVisible(true)} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
+                <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} style={[styles.iconButton, { backgroundColor: theme.iconBg }]} disabled={isLoading}>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={theme.iconColor} />
+                ) : (
+                  <Ionicons name="checkmark" size={24} color={theme.iconColor} />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </WebContainer>
 
         <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+        <WebContainer>
           {/* Info Section */}
           <View style={styles.infoSection}>
             <TextInput
@@ -294,6 +298,7 @@ export default function CreateModuleScreen() {
           </View>
 
           <View style={{ height: 100 }} />
+        </WebContainer>
         </ScrollView>
 
         {/* Floating Add Button */}

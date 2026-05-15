@@ -50,7 +50,7 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 20 : 10,
+    bottom: Platform.OS === 'ios' ? 28 : 24,
     left: 20,
     right: 20,
     elevation: 10,

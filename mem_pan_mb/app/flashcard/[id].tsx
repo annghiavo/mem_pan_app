@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimen
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeckCards } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -122,56 +123,58 @@ export default function FlashcardScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="close" size={28} color={theme.iconColor} />
-        </TouchableOpacity>
-        <Text style={[styles.progressText, { color: theme.text }]}>{currentIndex + 1} / {cards.length}</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={900}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="close" size={28} color={theme.iconColor} />
+          </TouchableOpacity>
+          <Text style={[styles.progressText, { color: theme.text }]}>{currentIndex + 1} / {cards.length}</Text>
+          <TouchableOpacity style={styles.iconButton}>
+            <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
+          </TouchableOpacity>
+        </View>
 
-      <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
-        <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / cards.length) * 100}%` }]} />
-      </View>
+        <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
+          <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / cards.length) * 100}%` }]} />
+        </View>
 
-      {/* Card Area */}
-      <View style={styles.cardContainer}>
-        <TouchableOpacity activeOpacity={1} onPress={flipCard} style={styles.cardWrapper}>
-          {/* Front */}
-          <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {cards[currentIndex].langFront ? (
-              <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langFront] || cards[currentIndex].langFront}</Text>
-            ) : null}
-            {cards[currentIndex].imageUrl ? (
-              <Image source={{ uri: cards[currentIndex].imageUrl }} style={styles.cardImage} resizeMode="contain" />
-            ) : null}
-            <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentFront}</Text>
-          </Animated.View>
-          {/* Back */}
-          <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
-            {cards[currentIndex].langBack ? (
-              <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langBack] || cards[currentIndex].langBack}</Text>
-            ) : null}
-            <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentBack}</Text>
-          </Animated.View>
-        </TouchableOpacity>
-      </View>
+        {/* Card Area */}
+        <View style={styles.cardContainer}>
+          <TouchableOpacity activeOpacity={1} onPress={flipCard} style={styles.cardWrapper}>
+            {/* Front */}
+            <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {cards[currentIndex].langFront ? (
+                <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langFront] || cards[currentIndex].langFront}</Text>
+              ) : null}
+              {cards[currentIndex].imageUrl ? (
+                <Image source={{ uri: cards[currentIndex].imageUrl }} style={styles.cardImage} resizeMode="contain" />
+              ) : null}
+              <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentFront}</Text>
+            </Animated.View>
+            {/* Back */}
+            <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              {cards[currentIndex].langBack ? (
+                <Text style={[styles.cardLangLabel, { color: theme.textMuted }]}>{langNameMap[cards[currentIndex].langBack] || cards[currentIndex].langBack}</Text>
+              ) : null}
+              <Text style={[styles.cardText, { color: theme.cardText }]}>{cards[currentIndex].contentBack}</Text>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
 
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity onPress={prevCard} disabled={currentIndex === 0} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === 0 && { backgroundColor: theme.navDisabled }]}>
-          <Ionicons name="arrow-back" size={28} color={currentIndex === 0 ? theme.navDisabledIcon : theme.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.playButton}>
-          <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === cards.length - 1 && { backgroundColor: theme.navDisabled }]}>
-          <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? theme.navDisabledIcon : theme.primary} />
-        </TouchableOpacity>
-      </View>
+        {/* Controls */}
+        <View style={styles.controls}>
+          <TouchableOpacity onPress={prevCard} disabled={currentIndex === 0} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === 0 && { backgroundColor: theme.navDisabled }]}>
+            <Ionicons name="arrow-back" size={28} color={currentIndex === 0 ? theme.navDisabledIcon : theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.playButton}>
+            <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === cards.length - 1 && { backgroundColor: theme.navDisabled }]}>
+            <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? theme.navDisabledIcon : theme.primary} />
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
     </SafeAreaView>
   );
 }

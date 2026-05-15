@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFolder, deleteFolder, updateFolder } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 export default function FolderDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -95,44 +96,48 @@ export default function FolderDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
-          <Ionicons name="arrow-back" size={24} color={theme.iconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.iconButton, { backgroundColor: theme.iconBg }]} onPress={() => setShowOptionsModal(true)}>
-          <Ionicons name="ellipsis-horizontal" size={24} color={theme.iconColor} />
-        </TouchableOpacity>
-      </View>
+      <WebContainer>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
+            <Ionicons name="arrow-back" size={24} color={theme.iconColor} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: theme.iconBg }]} onPress={() => setShowOptionsModal(true)}>
+            <Ionicons name="ellipsis-horizontal" size={24} color={theme.iconColor} />
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.folderHeader}>
-          <Text style={[styles.folderTitle, { color: theme.text }]}>{folder.name}</Text>
-          <View style={styles.authorInfo}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>B</Text></View>
-            <Text style={[styles.authorName, { color: theme.textMuted }]}>bạn</Text>
-          </View>
-        </View>
-
-        <View style={[styles.statsContainer, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.statsText, { color: theme.text }]}>{decks?.length || 0} Học phần</Text>
-        </View>
-
-        {/* Modules in folder */}
-        {decks && decks.length > 0 ? decks.map((item: any) => (
-          <TouchableOpacity key={item.deckId} style={[styles.moduleCard, { backgroundColor: theme.surface }]} onPress={() => router.push(`/module/${item.deckId}` as any)}>
-            <View style={styles.moduleContent}>
-              <Text style={[styles.moduleTitle, { color: theme.text }]}>{item.name}</Text>
-              <Text style={[styles.moduleSubtitle, { color: theme.textMuted }]}>{item.cardCount || 0} thuật ngữ • bạn</Text>
+        <WebContainer>
+          <View style={styles.folderHeader}>
+            <Text style={[styles.folderTitle, { color: theme.text }]}>{folder.name}</Text>
+            <View style={styles.authorInfo}>
+              <View style={styles.avatar}><Text style={styles.avatarText}>B</Text></View>
+              <Text style={[styles.authorName, { color: theme.textMuted }]}>bạn</Text>
             </View>
-            <View style={styles.moduleIcon}>
-              <Ionicons name="albums-outline" size={24} color={theme.textMuted} />
-            </View>
-          </TouchableOpacity>
-        )) : (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ color: theme.textMuted }}>Chưa có học phần nào trong thư mục này</Text>
           </View>
-        )}
+
+          <View style={[styles.statsContainer, { borderBottomColor: theme.border }]}>
+            <Text style={[styles.statsText, { color: theme.text }]}>{decks?.length || 0} Học phần</Text>
+          </View>
+
+          {/* Modules in folder */}
+          {decks && decks.length > 0 ? decks.map((item: any) => (
+            <TouchableOpacity key={item.deckId} style={[styles.moduleCard, { backgroundColor: theme.surface }]} onPress={() => router.push(`/module/${item.deckId}` as any)}>
+              <View style={styles.moduleContent}>
+                <Text style={[styles.moduleTitle, { color: theme.text }]}>{item.name}</Text>
+                <Text style={[styles.moduleSubtitle, { color: theme.textMuted }]}>{item.cardCount || 0} thuật ngữ • bạn</Text>
+              </View>
+              <View style={styles.moduleIcon}>
+                <Ionicons name="albums-outline" size={24} color={theme.textMuted} />
+              </View>
+            </TouchableOpacity>
+          )) : (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: theme.textMuted }}>Chưa có học phần nào trong thư mục này</Text>
+            </View>
+          )}
+        </WebContainer>
       </ScrollView>
 
       {/* Options Modal */}

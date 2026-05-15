@@ -6,6 +6,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getUserStats, getUserHeatmap, getUserDeckStats } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -236,17 +237,19 @@ export default function AchievementsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Thành tựu</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <WebContainer maxWidth={900}>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Thành tựu</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </WebContainer>
 
       {loading ? (
         <View style={styles.center}>
@@ -262,6 +265,7 @@ export default function AchievementsScreen() {
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <WebContainer maxWidth={900} paddingHorizontal={0}>
           {/* Streak banner */}
           <View style={[styles.streakBanner, { backgroundColor: theme.surface }]}>
             <View style={styles.streakMain}>
@@ -348,6 +352,7 @@ export default function AchievementsScreen() {
           )}
 
           <View style={{ height: 24 }} />
+          </WebContainer>
         </ScrollView>
       )}
     </SafeAreaView>

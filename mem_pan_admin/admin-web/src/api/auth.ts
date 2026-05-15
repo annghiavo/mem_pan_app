@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { authApi } from "./client";
 
 export interface LoginRequest {
   email: string;
@@ -35,7 +35,7 @@ export interface LoginResponse {
  * Returns the raw response data containing the token and user info.
  */
 export const loginUser = async (credentials: LoginRequest): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>(
+  const response = await authApi.post<LoginResponse>(
     "/v1/auth/login",
     credentials,
   );

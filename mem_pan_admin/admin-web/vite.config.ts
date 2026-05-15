@@ -7,10 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       "/v1": {
-        target: "https://8000-firebase-mempan-1777020210436.cluster-73qgvk7hjjadkrjeyexca5ivva.cloudworkstations.dev",
+        target: "http://localhost:8000",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },
 })
+

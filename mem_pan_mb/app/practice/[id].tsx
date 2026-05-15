@@ -6,6 +6,7 @@ import { getDeckCards, getDeckStudySettings } from '../../services/api';
 import { checkAnswer } from '../../utils/learningLogic';
 import { defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 
 export default function PracticeTestScreen() {
@@ -219,15 +220,18 @@ export default function PracticeTestScreen() {
 
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace(`/module/${deckId}` as any)} style={styles.iconButton}>
-            <Ionicons name="close" size={28} color={theme.iconColor} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>{userAnswers.length} / {questions.length}</Text>
-          <View style={{ width: 44 }} />
-        </View>
+        <WebContainer maxWidth={900}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.replace(`/module/${deckId}` as any)} style={styles.iconButton}>
+              <Ionicons name="close" size={28} color={theme.iconColor} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>{userAnswers.length} / {questions.length}</Text>
+            <View style={{ width: 44 }} />
+          </View>
+        </WebContainer>
 
         <ScrollView contentContainerStyle={styles.resultContent}>
+          <WebContainer maxWidth={900} paddingHorizontal={0}>
           <Text style={[styles.resultTitle, { color: theme.text }]}>Bạn đang tiến bộ!</Text>
           
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Kết quả của bạn</Text>
@@ -287,6 +291,7 @@ export default function PracticeTestScreen() {
               ) : null}
             </View>
           ))}
+          </WebContainer>
         </ScrollView>
       </SafeAreaView>
     );
@@ -296,18 +301,21 @@ export default function PracticeTestScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="close" size={28} color={theme.iconColor} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>{currentIndex + 1} / {questions.length}</Text>
-        <View style={{ width: 44 }} />
-      </View>
-      <View style={styles.progressBg}>
-        <View style={[styles.progressFill, { width: `${((currentIndex) / questions.length) * 100}%` }]} />
-      </View>
+      <WebContainer maxWidth={900}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="close" size={28} color={theme.iconColor} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>{currentIndex + 1} / {questions.length}</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={styles.progressBg}>
+          <View style={[styles.progressFill, { width: `${((currentIndex) / questions.length) * 100}%` }]} />
+        </View>
+      </WebContainer>
 
       <ScrollView contentContainerStyle={styles.qContent}>
+        <WebContainer maxWidth={900} paddingHorizontal={0}>
         <Text style={[styles.qLabel, { color: theme.textMuted }]}>Thuật ngữ</Text>
         {q.card.imageUrl ? (
           <Image source={{ uri: q.card.imageUrl }} style={styles.qImage} resizeMode="contain" />
@@ -393,6 +401,7 @@ export default function PracticeTestScreen() {
             </View>
           ) : null}
         </View>
+        </WebContainer>
       </ScrollView>
     </SafeAreaView>
   );

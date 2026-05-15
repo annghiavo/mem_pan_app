@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, useColorScheme, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { WebContainer } from '../../components/ui/WebContainer';
+import { showAlert } from '../../utils/alert';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -15,7 +17,7 @@ export default function LoginScreen() {
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   const theme = {
     background: isDark ? '#111111' : '#ffffff',
     text: isDark ? '#f4f4f5' : '#1a1f36',
@@ -49,7 +51,7 @@ export default function LoginScreen() {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error("Non-JSON response from server:", responseText);
-        Alert.alert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
+        showAlert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
         setLoading(false);
         return;
       }
@@ -65,14 +67,14 @@ export default function LoginScreen() {
         if (rToken) {
           await setRefreshToken(rToken);
         }
-        
-        Alert.alert('Thành công', 'Đăng nhập thành công!');
-        router.replace('/(tabs)');
+
+        showAlert('Thành công', 'Đăng nhập thành công!', () => router.replace('/(tabs)'));
+        if (Platform.OS === 'web') return; // router.replace already called in showAlert callback
       } else {
-        Alert.alert('Lỗi đăng nhập', data.message || 'Tài khoản hoặc mật khẩu không chính xác.');
+        showAlert('Lỗi đăng nhập', data.message || 'Tài khoản hoặc mật khẩu không chính xác.');
       }
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể kết nối đến máy chủ.');
+      showAlert('Lỗi', 'Không thể kết nối đến máy chủ.');
       console.error(error);
     } finally {
       setLoading(false);
@@ -81,7 +83,7 @@ export default function LoginScreen() {
 
   const handleForgotPassword = async () => {
     if (!forgotEmail.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email của bạn.');
+      showAlert('Lỗi', 'Vui lòng nhập email của bạn.');
       return;
     }
     try {
@@ -90,9 +92,9 @@ export default function LoginScreen() {
       await forgotPassword(forgotEmail.trim());
       setShowForgotModal(false);
       setForgotEmail('');
-      Alert.alert('Đã gửi', 'Vui lòng kiểm tra email để nhận liên kết đặt lại mật khẩu.');
+      showAlert('Đã gửi', 'Vui lòng kiểm tra email để nhận liên kết đặt lại mật khẩu.');
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Không thể gửi email. Vui lòng thử lại.');
+      showAlert('Lỗi', error.message || 'Không thể gửi email. Vui lòng thử lại.');
     } finally {
       setSendingReset(false);
     }
@@ -106,73 +108,75 @@ export default function LoginScreen() {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color={theme.text} />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.title, { color: theme.text }]}>Đăng nhập</Text>
-
-        <View style={styles.formContainer}>
-          <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
-            <TextInput
-              style={[styles.input, { color: theme.text }]}
-              placeholder="Email hoặc tên người dùng"
-              placeholderTextColor={theme.textMuted}
-              value={identifier}
-              onChangeText={setIdentifier}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
-
-          <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
-            <TextInput
-              style={[styles.input, { color: theme.text }]}
-              placeholder="Mật khẩu"
-              placeholderTextColor={theme.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Ionicons
-                name={showPassword ? "eye-outline" : "eye-off-outline"}
-                size={22}
-                color={theme.textMuted}
-              />
+        <WebContainer maxWidth={480} paddingHorizontal={0}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={28} color={theme.text} />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.loginButton, !isFormValid && { backgroundColor: theme.btnDisabled }]}
-            onPress={handleLogin}
-            disabled={!isFormValid || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={[styles.loginButtonText, !isFormValid && { color: theme.btnDisabledText }]}>
-                Đăng nhập
-              </Text>
-            )}
-          </TouchableOpacity>
+          <Text style={[styles.title, { color: theme.text }]}>Đăng nhập</Text>
 
-          <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => setShowForgotModal(true)}>
-            <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>Quên mật khẩu</Text>
-          </TouchableOpacity>
+          <View style={styles.formContainer}>
+            <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Email hoặc tên người dùng"
+                placeholderTextColor={theme.textMuted}
+                value={identifier}
+                onChangeText={setIdentifier}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
 
-          <TouchableOpacity
-            style={styles.registerLinkButton}
-            onPress={() => router.push('/(auth)/register' as any)}
-          >
-            <Text style={[styles.registerLinkText, { color: theme.text }]}>Chưa có tài khoản? Đăng ký ngay</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Mật khẩu"
+                placeholderTextColor={theme.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color={theme.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.loginButton, !isFormValid && { backgroundColor: theme.btnDisabled }]}
+              onPress={handleLogin}
+              disabled={!isFormValid || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={[styles.loginButtonText, !isFormValid && { color: theme.btnDisabledText }]}>
+                  Đăng nhập
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => setShowForgotModal(true)}>
+              <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>Quên mật khẩu</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.registerLinkButton}
+              onPress={() => router.push('/(auth)/register' as any)}
+            >
+              <Text style={[styles.registerLinkText, { color: theme.text }]}>Chưa có tài khoản? Đăng ký ngay</Text>
+            </TouchableOpacity>
+          </View>
+        </WebContainer>
       </KeyboardAvoidingView>
       {/* Forgot Password Modal */}
       <Modal visible={showForgotModal} transparent animationType="slide">

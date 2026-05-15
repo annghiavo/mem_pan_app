@@ -112,10 +112,14 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={[styles.searchContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+          <TouchableOpacity
+            style={[styles.searchContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
+            onPress={() => router.push('/search' as any)}
+            activeOpacity={0.8}
+          >
             <Ionicons name="search" size={20} color={theme.textMuted} />
-            <TextInput placeholder="Tìm kiếm" placeholderTextColor={theme.textMuted} style={[styles.searchInput, { color: theme.text }]} />
-          </View>
+            <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(profile)' as any)}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />

@@ -39,7 +39,7 @@ const handleResponse = async (response: Response) => {
       try {
         const { router } = require('expo-router');
         router.replace('/(auth)/login');
-      } catch (err) {}
+      } catch (err) { }
       return {};
     }
     throw new Error(data.message || 'API request failed');
@@ -182,14 +182,14 @@ export const getDeckCards = (deckId: string) => {
   return request(`/decks/${deckId}/cards`);
 };
 
-export const createCard = async (deckId: string, data: { 
-  contentFront: string; 
-  contentBack: string; 
+export const createCard = async (deckId: string, data: {
+  contentFront: string;
+  contentBack: string;
   image?: { uri: string; type: string; name: string };
-  imageUrl?: string; 
-  position?: number; 
-  langFront?: string; 
-  langBack?: string 
+  imageUrl?: string;
+  position?: number;
+  langFront?: string;
+  langBack?: string
 }) => {
   if (!authToken) {
     authToken = (await AsyncStorage.getItem('authToken')) || '';
@@ -466,4 +466,54 @@ export const parseImportFile = async (uri: string, mimeType: string, fileName: s
   });
 
   return handleResponse(response);
+};
+
+// --- Search ---
+export const searchCards = (query: string = '', deckId?: string, page: number = 1, pageSize: number = 20) => {
+  const params = new URLSearchParams();
+  if (query) params.set('query', query);
+  if (deckId) params.set('deckId', deckId);
+  params.set('page', page.toString());
+  params.set('pageSize', pageSize.toString());
+  return request(`/search/cards?${params.toString()}`);
+};
+
+export const searchDecks = (query: string = '', scope: string = 'DECK_SCOPE_UNSPECIFIED', page: number = 1, pageSize: number = 20) => {
+  const params = new URLSearchParams();
+  if (query) params.set('query', query);
+  if (scope) params.set('scope', scope);
+  params.set('page', page.toString());
+  params.set('pageSize', pageSize.toString());
+  return request(`/search/decks?${params.toString()}`);
+};
+
+export const searchFolders = (query: string = '', page: number = 1, pageSize: number = 20) => {
+  const params = new URLSearchParams();
+  if (query) params.set('query', query);
+  params.set('page', page.toString());
+  params.set('pageSize', pageSize.toString());
+  return request(`/search/folders?${params.toString()}`);
+};
+
+export const searchUsers = (query: string = '', page: number = 1, pageSize: number = 20) => {
+  const params = new URLSearchParams();
+  if (query) params.set('query', query);
+  params.set('page', page.toString());
+  params.set('pageSize', pageSize.toString());
+  return request(`/search/users?${params.toString()}`);
+};
+
+// --- Reports ---
+export const reportDeck = (deckId: string, payload: { reasonCategory: string; description?: string }) => {
+  return request(`/decks/${deckId}/reports`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const reportUser = (userId: string, payload: { reasonCategory: string; description?: string }) => {
+  return request(`/users/${userId}/reports`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 };

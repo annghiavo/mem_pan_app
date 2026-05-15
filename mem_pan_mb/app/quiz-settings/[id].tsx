@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeck, getDeckStudySettings, updateDeckStudySettings } from '../../services/api';
 import { StudySettings, defaultStudySettings } from '../../types/studySettings';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 const STRICTNESS_LABELS: Record<string, string> = {
   flexible: 'Nới lỏng',
@@ -121,13 +122,16 @@ export default function QuizSettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.surfaceAlt }]}>
-          <Ionicons name="close" size={28} color={theme.iconColor} />
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={720}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.surfaceAlt }]}>
+            <Ionicons name="close" size={28} color={theme.iconColor} />
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <WebContainer maxWidth={720} paddingHorizontal={0}>
         {deckName ? (
           <Text style={[styles.deckName, { color: theme.textMuted }]}>{deckName.toUpperCase()}</Text>
         ) : null}
@@ -261,19 +265,22 @@ export default function QuizSettingsScreen() {
             />
           </View>
         </View>
+        </WebContainer>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <TouchableOpacity
-          style={[styles.saveButton, saving && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving
-            ? <ActivityIndicator color="#ffffff" />
-            : <Text style={styles.saveButtonText}>Lưu cài đặt</Text>}
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={720} paddingHorizontal={0}>
+        <View style={[styles.footer, { borderTopColor: theme.border }]}>
+          <TouchableOpacity
+            style={[styles.saveButton, saving && { opacity: 0.6 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving
+              ? <ActivityIndicator color="#ffffff" />
+              : <Text style={styles.saveButtonText}>Lưu cài đặt</Text>}
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
 
       {/* Strictness picker modal */}
       <Modal visible={showStrictnessPicker} transparent animationType="fade">

@@ -1,8 +1,17 @@
+import { Layers } from "lucide-react";
+import ComingSoonPanel from "../components/common/ComingSoonPanel";
+
 export default function DecksPage() {
   return (
-    <div className="animate-fade-in glass-panel" style={{ padding: "3rem", textAlign: "center" }}>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>Decks Management</h1>
-      <p style={{ color: "var(--text-muted)" }}>This feature is coming soon.</p>
-    </div>
+    <ComingSoonPanel
+      icon={Layers}
+      title="Decks"
+      description="Hide, restore, or delete user-created decks."
+      plannedFeatures={[
+        "Update a deck's status to hidden, deleted, or active",
+        "Record a moderation reason against the deck",
+        "Link directly from a deck report into the deck record",
+      ]}
+    />
   );
 }

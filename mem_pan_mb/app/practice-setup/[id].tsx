@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Swi
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeck, getDeckCards } from '../../services/api';
+import { WebContainer } from '../../components/ui/WebContainer';
 
 const langNameMap: Record<string, string> = {
   vi: 'Tiếng Việt',
@@ -135,13 +136,16 @@ export default function PracticeSetupScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: isDark ? '#27272a' : '#f3f4f6' }]}>
-          <Ionicons name="close" size={28} color={theme.iconColor} />
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={720}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: isDark ? '#27272a' : '#f3f4f6' }]}>
+            <Ionicons name="close" size={28} color={theme.iconColor} />
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <WebContainer maxWidth={720} paddingHorizontal={0}>
         {deck ? (
           <Text style={[styles.deckName, { color: theme.textMuted }]}>{deck.name.toUpperCase()}</Text>
         ) : null}
@@ -226,17 +230,20 @@ export default function PracticeSetupScreen() {
             Cần ít nhất 2 thẻ trong bộ thẻ để tạo bài kiểm tra.
           </Text>
         ) : null}
+        </WebContainer>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.startButton, totalCards < 2 && { opacity: 0.5 }]}
-          onPress={handleStart}
-          disabled={totalCards < 2}
-        >
-          <Text style={styles.startButtonText}>Bắt đầu làm kiểm tra</Text>
-        </TouchableOpacity>
-      </View>
+      <WebContainer maxWidth={720}>
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.startButton, totalCards < 2 && { opacity: 0.5 }]}
+            onPress={handleStart}
+            disabled={totalCards < 2}
+          >
+            <Text style={styles.startButtonText}>Bắt đầu làm kiểm tra</Text>
+          </TouchableOpacity>
+        </View>
+      </WebContainer>
 
       {/* Question Count Picker Modal */}
       <Modal visible={showQuestionPicker} transparent animationType="fade">
