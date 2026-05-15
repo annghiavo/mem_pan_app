@@ -109,11 +109,7 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <WebContainer maxWidth={480} paddingHorizontal={0}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={28} color={theme.text} />
-            </TouchableOpacity>
-          </View>
+          <View style={styles.header} />
 
           <Text style={[styles.title, { color: theme.text }]}>Đăng nhập</Text>
 

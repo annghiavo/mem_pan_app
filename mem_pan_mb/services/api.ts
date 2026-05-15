@@ -35,11 +35,16 @@ const handleResponse = async (response: Response) => {
 
   if (!response.ok) {
     if (response.status === 401) {
+      const onPublicAuthRoute =
+        typeof window !== 'undefined' &&
+        /\/(reset-password|login|register)(\b|\/|\?|$)/.test(window.location?.pathname || '');
       await clearAuth();
-      try {
-        const { router } = require('expo-router');
-        router.replace('/(auth)/login');
-      } catch (err) { }
+      if (!onPublicAuthRoute) {
+        try {
+          const { router } = require('expo-router');
+          router.replace('/(auth)/login');
+        } catch (err) { }
+      }
       return {};
     }
     throw new Error(data.message || 'API request failed');
@@ -76,6 +81,13 @@ export const forgotPassword = (email: string) => {
   return request('/auth/forgot-password', {
     method: 'POST',
     body: JSON.stringify({ email }),
+  });
+};
+
+export const resetPassword = (token: string, newPassword: string) => {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
   });
 };
 
@@ -443,18 +455,29 @@ export const unregisterDeviceToken = (token: string) => {
 };
 
 // --- Import ---
-export const parseImportFile = async (uri: string, mimeType: string, fileName: string, fileType: 'csv' | 'tsv' | 'pdf') => {
+export const parseImportFile = async (
+  fileSource: string | Blob,
+  mimeType: string,
+  fileName: string,
+  fileType: 'csv' | 'tsv' | 'pdf'
+) => {
   if (!authToken) {
     authToken = (await AsyncStorage.getItem('authToken')) || '';
     currentRefreshToken = (await AsyncStorage.getItem('refreshToken')) || '';
   }
 
   const formData = new FormData();
-  formData.append('file', {
-    uri,
-    type: mimeType,
-    name: fileName,
-  } as any);
+  if (typeof fileSource === 'string') {
+    // React Native: pass the file descriptor object
+    formData.append('file', {
+      uri: fileSource,
+      type: mimeType,
+      name: fileName,
+    } as any);
+  } else {
+    // Web: pass the real File/Blob so the multipart body is well-formed
+    formData.append('file', fileSource, fileName);
+  }
   formData.append('file_type', fileType);
 
   const response = await fetch(`${API_URL}/import/parse`, {

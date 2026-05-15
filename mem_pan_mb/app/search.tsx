@@ -28,17 +28,22 @@ export default function SearchScreen() {
         }
         setLoading(true);
         try {
-            let res;
+            let res: any;
+            let items: any[] = [];
             if (activeTab === 0) {
                 res = await searchDecks(query);
+                items = res.decks || [];
             } else if (activeTab === 1) {
                 res = await searchCards(query);
+                items = res.cards || [];
             } else if (activeTab === 2) {
                 res = await searchFolders(query);
+                items = res.folders || [];
             } else if (activeTab === 3) {
                 res = await searchUsers(query);
+                items = res.users || [];
             }
-            setResults(res.hits || []);
+            setResults(items);
         } catch (e) {
             console.warn('Search error: ', e);
             setResults([]);
@@ -57,25 +62,31 @@ export default function SearchScreen() {
     const renderItem = ({ item }: { item: any }) => {
         if (activeTab === 0) {
             return (
-                <ThemedView style={styles.card}>
-                    <ThemedText style={styles.title}>{item.name}</ThemedText>
-                    {item.description ? <ThemedText style={styles.desc} numberOfLines={2}>{item.description}</ThemedText> : null}
-                    <ThemedText style={styles.meta}><Ionicons name="documents-outline" /> {item.cardCount || 0} cards</ThemedText>
-                </ThemedView>
+                <TouchableOpacity onPress={() => router.push(`/module/${item.deckId}` as any)}>
+                    <ThemedView style={styles.card}>
+                        <ThemedText style={styles.title}>{item.name}</ThemedText>
+                        {item.description ? <ThemedText style={styles.desc} numberOfLines={2}>{item.description}</ThemedText> : null}
+                        <ThemedText style={styles.meta}><Ionicons name="documents-outline" /> {item.cardCount || 0} cards</ThemedText>
+                    </ThemedView>
+                </TouchableOpacity>
             );
         } else if (activeTab === 1) {
             return (
-                <ThemedView style={styles.card}>
-                    <ThemedText style={styles.title} numberOfLines={2}>{item.contentFront}</ThemedText>
-                    <ThemedText style={styles.desc} numberOfLines={2}>{item.contentBack}</ThemedText>
-                </ThemedView>
+                <TouchableOpacity onPress={() => router.push(`/module/${item.deckId}` as any)}>
+                    <ThemedView style={styles.card}>
+                        <ThemedText style={styles.title} numberOfLines={2}>{item.contentFront}</ThemedText>
+                        <ThemedText style={styles.desc} numberOfLines={2}>{item.contentBack}</ThemedText>
+                    </ThemedView>
+                </TouchableOpacity>
             );
         } else if (activeTab === 2) {
             return (
-                <ThemedView style={styles.card}>
-                    <ThemedText style={styles.title}><Ionicons name="folder-outline" /> {item.name}</ThemedText>
-                    {item.description ? <ThemedText style={styles.desc}>{item.description}</ThemedText> : null}
-                </ThemedView>
+                <TouchableOpacity onPress={() => router.push(`/folder/${item.folderId}` as any)}>
+                    <ThemedView style={styles.card}>
+                        <ThemedText style={styles.title}><Ionicons name="folder-outline" /> {item.name}</ThemedText>
+                        {item.description ? <ThemedText style={styles.desc}>{item.description}</ThemedText> : null}
+                    </ThemedView>
+                </TouchableOpacity>
             );
         } else if (activeTab === 3) {
             return (

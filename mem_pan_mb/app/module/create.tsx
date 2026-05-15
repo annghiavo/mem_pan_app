@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +41,30 @@ export default function CreateModuleScreen() {
     { id: '1', term: '', definition: '' },
     { id: '2', term: '', definition: '' },
   ]);
+
+  const [importingFileName, setImportingFileName] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importDone, setImportDone] = useState(false);
+  const importIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (importIntervalRef.current) clearInterval(importIntervalRef.current);
+    };
+  }, []);
+
+  const stopProgress = () => {
+    if (importIntervalRef.current) {
+      clearInterval(importIntervalRef.current);
+      importIntervalRef.current = null;
+    }
+  };
+
+  const hideImportOverlay = () => {
+    setImportingFileName(null);
+    setImportProgress(0);
+    setImportDone(false);
+  };
 
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [termLang, setTermLang] = useState('Tiếng Anh');
@@ -108,17 +132,60 @@ export default function CreateModuleScreen() {
       }
 
       const file = result.assets[0];
-      const uri = file.uri;
-      
+
       let type: 'csv' | 'tsv' | 'pdf' = 'csv';
       if (file.name.toLowerCase().endsWith('.pdf')) type = 'pdf';
       else if (file.name.toLowerCase().endsWith('.tsv')) type = 'tsv';
-      
-      setIsLoading(true);
+
       const mimeType = file.mimeType || (type === 'pdf' ? 'application/pdf' : type === 'csv' ? 'text/csv' : 'text/tab-separated-values');
-      
-      const parsedData = await parseImportFile(uri, mimeType, file.name, type);
-      
+
+      // On web, expo-document-picker exposes a real File via asset.file; the
+      // uri is a blob: URL that FormData can't append directly. Fall back to
+      // fetching the blob URL if asset.file is missing for any reason.
+      let fileSource: string | Blob = file.uri;
+      if (Platform.OS === 'web') {
+        const webFile: Blob | undefined = (file as any).file;
+        if (webFile) {
+          fileSource = webFile;
+        } else if (file.uri) {
+          try {
+            fileSource = await fetch(file.uri).then(r => r.blob());
+          } catch {
+            // keep uri fallback; server will likely reject but we let it surface
+          }
+        }
+      }
+
+      // Show notification + virtual progress bar
+      setImportingFileName(file.name);
+      setImportProgress(0);
+      setImportDone(false);
+      setIsLoading(true);
+
+      stopProgress();
+      importIntervalRef.current = setInterval(() => {
+        setImportProgress(prev => {
+          if (prev >= 90) return 90;
+          // Ease-out: bigger jumps early, smaller as we approach 90.
+          const increment = Math.max(0.6, (90 - prev) * 0.06);
+          return Math.min(90, prev + increment);
+        });
+      }, 150);
+
+      let parsedData: any;
+      try {
+        parsedData = await parseImportFile(fileSource, mimeType, file.name, type);
+      } catch (err) {
+        stopProgress();
+        hideImportOverlay();
+        throw err;
+      }
+
+      // Server returned — complete the bar to 100%, hold briefly, then hide.
+      stopProgress();
+      setImportProgress(100);
+      setImportDone(true);
+
       if (parsedData.cards && parsedData.cards.length > 0) {
         const currentTerms = terms.filter(t => t.term.trim() || t.definition.trim());
         const newTerms = parsedData.cards.map((card: any, index: number) => ({
@@ -126,13 +193,21 @@ export default function CreateModuleScreen() {
           term: card.front || '',
           definition: card.back || ''
         }));
-        
+
         setTerms([...currentTerms, ...newTerms]);
-        Alert.alert('Thành công', `Đã nhập ${parsedData.total || newTerms.length} thẻ`);
+        setTimeout(() => {
+          hideImportOverlay();
+          Alert.alert('Thành công', `Đã nhập ${parsedData.total || newTerms.length} thẻ`);
+        }, 600);
       } else {
-        Alert.alert('Thông báo', 'Không tìm thấy thẻ nào trong tệp');
+        setTimeout(() => {
+          hideImportOverlay();
+          Alert.alert('Thông báo', 'Không tìm thấy thẻ nào trong tệp');
+        }, 600);
       }
     } catch (error: any) {
+      stopProgress();
+      hideImportOverlay();
       Alert.alert('Lỗi', error.message || 'Không thể nhập tệp');
     } finally {
       setIsLoading(false);
@@ -305,6 +380,42 @@ export default function CreateModuleScreen() {
         <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={addTerm}>
           <Ionicons name="add" size={24} color="#ffffff" />
         </TouchableOpacity>
+
+        {/* Import progress notification */}
+        {importingFileName && (
+          <View pointerEvents="none" style={styles.importOverlay}>
+            <View style={[styles.importCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons
+                name={importDone ? 'checkmark-circle' : 'document-text-outline'}
+                size={24}
+                color={importDone ? '#10b981' : theme.primary}
+              />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.importFileName, { color: theme.text }]} numberOfLines={1}>
+                  {importingFileName}
+                </Text>
+                <Text style={[styles.importStatus, { color: theme.textMuted }]}>
+                  {importDone
+                    ? 'Hoàn tất'
+                    : importProgress >= 90
+                      ? 'Đang xử lý trên máy chủ...'
+                      : `Đang tải lên... ${Math.floor(importProgress)}%`}
+                </Text>
+                <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${importProgress}%`,
+                        backgroundColor: importDone ? '#10b981' : theme.primary,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Settings Modal */}
@@ -428,6 +539,12 @@ const styles = StyleSheet.create({
   termInput: { fontSize: 16, paddingVertical: 8 },
   divider: { height: 1, marginVertical: 8 },
   fab: { position: 'absolute', bottom: 32, alignSelf: 'center', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  importOverlay: { position: 'absolute', top: 72, left: 16, right: 16, zIndex: 100, alignItems: 'center' },
+  importCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, width: '100%', maxWidth: 480, borderWidth: 1, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
+  importFileName: { fontSize: 14, fontWeight: '600' },
+  importStatus: { fontSize: 12, marginTop: 2 },
+  progressTrack: { height: 4, borderRadius: 2, marginTop: 8, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 2 },
   modalContainer: { flex: 1 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   modalBackButton: { padding: 8, marginLeft: -8, width: 40, alignItems: 'center' },

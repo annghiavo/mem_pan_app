@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, useColorScheme, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks } from '../../services/api';
@@ -109,16 +109,14 @@ export default function HomeWebScreen() {
                             <Text style={[styles.greeting, { color: theme.text }]}>Chào mừng trở lại,</Text>
                             <Text style={[styles.username, { color: theme.primary }]}>{username}</Text>
                         </View>
-                        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => router.push('/search' as any)}
+                            style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                        >
                             <Ionicons name="search" size={20} color={theme.textMuted} />
-                            <TextInput
-                                placeholder="Tìm kiếm học phần, thư mục..."
-                                placeholderTextColor={theme.textMuted}
-                                style={[styles.searchInput, { color: theme.text }]}
-                                // @ts-ignore
-                                outlineStyle={{ display: 'none' }}
-                            />
-                        </View>
+                            <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm học phần, thư mục...</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Học tiếp - Study Sessions with Progress */}
@@ -232,6 +230,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderWidth: 1,
         minWidth: 320,
+        cursor: 'pointer',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 5,
@@ -240,8 +239,6 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: 12,
         fontSize: 16,
-        // @ts-ignore
-        outlineWidth: 0,
     },
     section: {
         marginBottom: 40,
