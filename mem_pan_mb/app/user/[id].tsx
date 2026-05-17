@@ -1,32 +1,63 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Modal, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Modal, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { useThemeColor } from '../../hooks/use-theme-color';
 import { ReportSheet } from '../../components/ui/ReportSheet';
+import { getUserPublicProfile } from '../../services/api';
 
 export default function UserProfileScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams();
 
-    // In a real app we'd fetch the user's details based on the id
-    const [user] = useState<any>({
-        username: 'Phongdv26',
-        fullName: 'Phongdv26',
-        joinDate: 'Tháng 5 năm 2026',
-        avatarUrl: null
-    });
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    const [activeTab, setActiveTab] = useState('decks');
+    useEffect(() => {
+        if (!id) return;
+        getUserPublicProfile(id as string)
+            .then((res: any) => {
+                setUser(res.user || res);
+            })
+            .catch(() => setUser(null))
+            .finally(() => setLoading(false));
+    }, [id]);
+
     const [showOptionsModal, setShowOptionsModal] = useState(false);
     const [showReportSheet, setShowReportSheet] = useState(false);
 
     const backgroundColor = useThemeColor({}, 'background');
-    const surfaceColor = useThemeColor({}, 'background');
     const textColor = useThemeColor({}, 'text');
     const muteColor = '#9ca3af';
     const primaryColor = '#5865F2';
+
+    if (loading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor }]}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={primaryColor} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!user) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor }]}>
+                <WebContainer maxWidth={720}>
+                    <View style={styles.header}>
+                        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+                            <Ionicons name="arrow-back" size={24} color={textColor} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 }}>
+                        <Text style={{ color: textColor }}>Không tìm thấy người dùng</Text>
+                    </View>
+                </WebContainer>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor }]}>
@@ -56,45 +87,17 @@ export default function UserProfileScreen() {
                                 <Ionicons name="school" size={12} color="#fff" />
                             </View>
                         </View>
-                        <Text style={[styles.userName, { color: textColor }]}>{user.username}</Text>
-                    </View>
-
-                    {/* Tabs */}
-                    <View style={styles.tabsContainer}>
-                        <TouchableOpacity style={[styles.tab, activeTab === 'decks' && styles.activeTab]} onPress={() => setActiveTab('decks')}>
-                            <Text style={[styles.tabText, { color: activeTab === 'decks' ? primaryColor : textColor }]}>Các học phần</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tab, activeTab === 'classes' && styles.activeTab]} onPress={() => setActiveTab('classes')}>
-                            <Text style={[styles.tabText, { color: activeTab === 'classes' ? primaryColor : textColor }]}>Lớp học</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tab, activeTab === 'folders' && styles.activeTab]} onPress={() => setActiveTab('folders')}>
-                            <Text style={[styles.tabText, { color: activeTab === 'folders' ? primaryColor : textColor }]}>Thư mục</Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.userName, { color: textColor }]}>{user.username || user.fullName}</Text>
                     </View>
 
                     {/* Content */}
                     <View style={styles.contentContainer}>
-                        <Text style={[styles.dateText, { color: muteColor }]}>{user.joinDate}</Text>
-
-                        {activeTab === 'decks' && (
-                            <View style={styles.cardsList}>
-                                {[1, 2, 3].map((item) => (
-                                    <View key={item} style={[styles.deckCard, { backgroundColor: '#fff', borderColor: '#f0f0f0' }]}>
-                                        <Text style={styles.deckTitle}>Mimi Kara Oboeru Unit 10 {item}</Text>
-                                        <Text style={styles.deckTermsCount}>45 thuật ngữ</Text>
-                                        <View style={styles.deckAuthor}>
-                                            <View style={[styles.smallAvatar, { backgroundColor: primaryColor }]}>
-                                                <Ionicons name="person" size={12} color="#fff" />
-                                            </View>
-                                            <Text style={styles.deckAuthorName}>{user.username}</Text>
-                                        </View>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                        {activeTab !== 'decks' && (
-                            <Text style={[styles.emptyText, { color: muteColor }]}>Không có dữ liệu</Text>
-                        )}
+                        {user.createdAt ? (
+                            <Text style={[styles.dateText, { color: muteColor }]}>
+                                Tham gia: {new Date(user.createdAt).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
+                            </Text>
+                        ) : null}
+                        <Text style={[styles.emptyText, { color: muteColor }]}>Không có dữ liệu</Text>
                     </View>
                 </ScrollView>
             </WebContainer>

@@ -55,10 +55,8 @@ const formatStudyTime = (ms: number) => {
   return '<1 phút';
 };
 
-const CELL = 12;
-const GAP = 2;
-const UNIT = CELL + GAP;
-const NUM_WEEKS = 53;
+const NUM_WEEKS = 6;
+const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 const buildGrid = (entries: HeatmapEntry[]): HeatCell[][] => {
   const map = new Map<string, number>();
@@ -84,25 +82,6 @@ const buildGrid = (entries: HeatmapEntry[]): HeatCell[][] => {
     weeks.push(week);
   }
   return weeks;
-};
-
-const buildMonthLabels = (weeks: HeatCell[][]) => {
-  const labels: { text: string; col: number }[] = [];
-  let last = '';
-  weeks.forEach((week, i) => {
-    const d = new Date(week[0].date + 'T00:00:00');
-    const m = d.toLocaleString('vi-VN', { month: 'short' });
-    if (m !== last) { labels.push({ text: m, col: i }); last = m; }
-  });
-  return labels;
-};
-
-const heatColor = (count: number, isDark: boolean) => {
-  if (count === 0) return isDark ? '#2a2a2d' : '#e5e7eb';
-  if (count < 5)  return '#9da5f8';
-  if (count < 15) return '#7b83f4';
-  if (count < 30) return '#5865F2';
-  return '#3b48e0';
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -233,8 +212,6 @@ export default function AchievementsScreen() {
     ? Math.round((stats.totalCorrect / stats.totalReviews) * 100)
     : null;
 
-  const monthLabels = grid.length > 0 ? buildMonthLabels(grid) : [];
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <WebContainer maxWidth={900}>
@@ -292,53 +269,33 @@ export default function AchievementsScreen() {
             <StatCard icon="checkmark-circle-outline"  iconColor="#10b981" value={accuracy !== null ? `${accuracy}%` : '–'}                  label="Độ chính xác"  theme={theme} isDark={isDark} />
           </View>
 
-          {/* Activity heatmap */}
+          {/* Activity calendar */}
           <View style={[styles.section, { backgroundColor: theme.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Hoạt động</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ width: grid.length * UNIT }}>
-                {/* Month labels */}
-                <View style={{ height: 18, position: 'relative' }}>
-                  {monthLabels.map((ml) => (
-                    <Text
-                      key={ml.col}
-                      style={[styles.monthLabel, { left: ml.col * UNIT, color: theme.textMuted }]}
-                    >
-                      {ml.text}
-                    </Text>
-                  ))}
-                </View>
-                {/* Day rows */}
-                {Array.from({ length: 7 }, (_, dayIdx) => (
-                  <View key={dayIdx} style={styles.heatRow}>
-                    {grid.map((week, wi) => {
-                      const cell = week[dayIdx];
-                      return (
-                        <View
-                          key={wi}
-                          style={[
-                            styles.heatCell,
-                            {
-                              backgroundColor: cell.isFuture
-                                ? 'transparent'
-                                : heatColor(cell.count, isDark),
-                            },
-                          ]}
-                        />
-                      );
-                    })}
-                  </View>
+            {/* Day-of-week header */}
+            <View style={styles.calDayRow}>
+              {DAY_LABELS.map((label) => (
+                <Text key={label} style={[styles.calDayLabel, { color: theme.textMuted }]}>{label}</Text>
+              ))}
+            </View>
+            {/* Week rows */}
+            {grid.map((week, wi) => (
+              <View key={wi} style={styles.calDayRow}>
+                {week.map((cell) => (
+                  <View
+                    key={cell.date}
+                    style={[
+                      styles.calDot,
+                      cell.isFuture
+                        ? { backgroundColor: 'transparent' }
+                        : cell.count > 0
+                          ? { backgroundColor: theme.primary }
+                          : { backgroundColor: isDark ? '#2a2a2d' : '#e5e7eb' },
+                    ]}
+                  />
                 ))}
-                {/* Legend */}
-                <View style={styles.legendRow}>
-                  <Text style={[styles.legendSide, { color: theme.textMuted }]}>Ít</Text>
-                  {[0, 3, 10, 20, 35].map((v) => (
-                    <View key={v} style={[styles.heatCell, { backgroundColor: heatColor(v, isDark) }]} />
-                  ))}
-                  <Text style={[styles.legendSide, { color: theme.textMuted }]}>Nhiều</Text>
-                </View>
               </View>
-            </ScrollView>
+            ))}
           </View>
 
           {/* Deck breakdown */}
@@ -415,12 +372,10 @@ const styles = StyleSheet.create({
   },
   sectionTitle:   { fontSize: 16, fontWeight: '700', marginBottom: 12 },
 
-  // Heatmap
-  monthLabel:     { position: 'absolute', fontSize: 10, top: 2 },
-  heatRow:        { flexDirection: 'row', gap: GAP, marginBottom: GAP },
-  heatCell:       { width: CELL, height: CELL, borderRadius: 2 },
-  legendRow:      { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
-  legendSide:     { fontSize: 10, marginHorizontal: 2 },
+  // Activity calendar
+  calDayRow:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  calDayLabel:    { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600' },
+  calDot:         { flex: 1, aspectRatio: 1, borderRadius: 99, marginHorizontal: 2 },
 
   // Deck rows
   deckRow:        { paddingTop: 14, borderTopWidth: 1, marginTop: 2 },

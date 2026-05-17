@@ -27,11 +27,13 @@ export default function HomeScreen() {
 
   const fetchData = useCallback(async () => {
     const studyDeckIds = new Set<string>();
+    let recentSessionDecks: any[] = [];
     try {
       try {
         const res = await getRecentDecks();
-        if (res.decks && res.decks.length > 0) {
-          const sessionPromises = res.decks.slice(0, 5).map(async (d: any) => {
+        recentSessionDecks = res.decks || [];
+        if (recentSessionDecks.length > 0) {
+          const sessionPromises = recentSessionDecks.slice(0, 5).map(async (d: any) => {
             try {
               const deckRes = await getDeck(d.deckId);
               const progressRes = await getDeckProgress(d.deckId).catch(() => null);
@@ -54,25 +56,44 @@ export default function HomeScreen() {
         console.error('Error fetching study sessions', error);
       }
 
+      // "Gần đây" merges the user's library with decks they've studied (including
+      // public decks they don't own), so non-owned decks they've opened show up too.
       try {
-        const res = await getDecks(1, 6);
-        if (res.decks && res.decks.length > 0) {
-          const enriched = await Promise.all(
-            res.decks.slice(0, 6).map(async (d: any) => {
+        const [libRes, studiedDetails] = await Promise.all([
+          getDecks(1, 6).catch(() => ({ decks: [] })),
+          Promise.all(
+            recentSessionDecks.slice(0, 10).map(async (d: any) => {
               try {
                 const deckRes = await getDeck(d.deckId);
-                return {
-                  ...d,
-                  ...deckRes.deck,
-                  creatorUsername: deckRes.creatorUsername || '',
-                };
+                return { ...d, ...deckRes.deck, creatorUsername: deckRes.creatorUsername || '' };
               } catch (e) {
-                return d;
+                return null;
               }
             })
-          );
-          setRecentDecks(enriched);
+          ),
+        ]);
+
+        const enrichedLib = await Promise.all(
+          (libRes.decks || []).slice(0, 6).map(async (d: any) => {
+            try {
+              const deckRes = await getDeck(d.deckId);
+              return { ...d, ...deckRes.deck, creatorUsername: deckRes.creatorUsername || '' };
+            } catch (e) {
+              return d;
+            }
+          })
+        );
+
+        const studiedValid = studiedDetails.filter(d => d !== null);
+
+        const seen = new Set<string>();
+        const merged: any[] = [];
+        for (const d of [...studiedValid, ...enrichedLib]) {
+          if (!d?.deckId || seen.has(d.deckId)) continue;
+          seen.add(d.deckId);
+          merged.push(d);
         }
+        setRecentDecks(merged.slice(0, 6));
       } catch (error) {
         console.error('Error fetching recent decks', error);
       }

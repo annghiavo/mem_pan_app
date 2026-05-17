@@ -48,11 +48,13 @@ export default function HomeWebScreen() {
     const [username, setUsername] = useState('M');
 
     const fetchData = useCallback(async () => {
+        let recentSessionDecks: any[] = [];
         try {
             try {
                 const res = await getRecentDecks();
-                if (res.decks && res.decks.length > 0) {
-                    const sessionPromises = res.decks.slice(0, 8).map(async (d: any) => {
+                recentSessionDecks = res.decks || [];
+                if (recentSessionDecks.length > 0) {
+                    const sessionPromises = recentSessionDecks.slice(0, 8).map(async (d: any) => {
                         try {
                             const deckRes = await getDeck(d.deckId);
                             const progressRes = await getDeckProgress(d.deckId).catch(() => null);
@@ -70,11 +72,31 @@ export default function HomeWebScreen() {
                 }
             } catch (error) { }
 
+            // "Đã xem gần đây" includes studied decks (own + non-own) plus the user's library.
             try {
-                const res = await getDecks(1, 10);
-                if (res.decks && res.decks.length > 0) {
-                    setRecentDecks(res.decks);
+                const [libRes, studiedDetails] = await Promise.all([
+                    getDecks(1, 10).catch(() => ({ decks: [] })),
+                    Promise.all(
+                        recentSessionDecks.slice(0, 10).map(async (d: any) => {
+                            try {
+                                const deckRes = await getDeck(d.deckId);
+                                return { ...d, ...deckRes.deck };
+                            } catch (e) {
+                                return null;
+                            }
+                        })
+                    ),
+                ]);
+
+                const studiedValid = studiedDetails.filter(d => d !== null);
+                const seen = new Set<string>();
+                const merged: any[] = [];
+                for (const d of [...studiedValid, ...(libRes.decks || [])]) {
+                    if (!d?.deckId || seen.has(d.deckId)) continue;
+                    seen.add(d.deckId);
+                    merged.push(d);
                 }
+                setRecentDecks(merged.slice(0, 10));
             } catch (error) { }
         } finally {
             setLoading(false);

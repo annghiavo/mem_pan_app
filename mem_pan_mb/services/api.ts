@@ -102,6 +102,10 @@ export const getCurrentUser = () => {
   return request('/users/me');
 };
 
+export const getUserPublicProfile = (userId: string) => {
+  return request(`/users/${userId}`);
+};
+
 export const changePassword = (oldPassword: string, newPassword: string) => {
   return request('/users/me/password', {
     method: 'PATCH',

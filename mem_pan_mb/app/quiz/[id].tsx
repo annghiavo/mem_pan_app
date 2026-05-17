@@ -16,9 +16,23 @@ import { WebContainer } from '../../components/ui/WebContainer';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type QuestionType = 'mc' | 'written';
+
+// Each "question key" identifies a (cardId, questionType) pair. With both
+// MC and Written enabled the user has to answer each card once per type,
+// so 50 cards × 2 types = 100 question keys.
+type QuestionKey = string; // `${cardId}__${type}`
+
+const makeKey = (cardId: string, type: QuestionType): QuestionKey => `${cardId}__${type}`;
+const parseKey = (key: QuestionKey): { cardId: string; type: QuestionType } => {
+  const idx = key.lastIndexOf('__');
+  return { cardId: key.slice(0, idx), type: key.slice(idx + 2) as QuestionType };
+};
+
 type QuizQuestion = {
+  key: QuestionKey;
   cardId: string;
-  type: 'mc' | 'written';
+  type: QuestionType;
   questionText: string;
   imageUrl?: string;
   correctAnswer: string;
@@ -32,24 +46,36 @@ function getRandomBatchSize(poolSize: number): number {
   return Math.min(size, poolSize);
 }
 
+function enabledQuestionTypes(settings: StudySettings): QuestionType[] {
+  const types: QuestionType[] = [];
+  if (settings.questionTypeMultipleChoice) types.push('mc');
+  if (settings.questionTypeWritten) types.push('written');
+  if (types.length === 0) types.push('mc');
+  return types;
+}
+
+// Expand a list of card IDs into one key per (card, enabled type) pair.
+function expandCardsToKeys(cardIds: string[], settings: StudySettings): QuestionKey[] {
+  const types = enabledQuestionTypes(settings);
+  const keys: QuestionKey[] = [];
+  for (const cardId of cardIds) {
+    for (const type of types) {
+      keys.push(makeKey(cardId, type));
+    }
+  }
+  return keys;
+}
+
 function buildRoundQuestions(
-  cardIds: string[],
+  keys: QuestionKey[],
   cardsMap: Record<string, any>,
   allCards: any[],
-  settings: StudySettings,
 ): QuizQuestion[] {
-  const useMC = settings.questionTypeMultipleChoice;
-  const useWritten = settings.questionTypeWritten;
-
   const list: QuizQuestion[] = [];
-  for (const cardId of cardIds) {
+  for (const key of keys) {
+    const { cardId, type } = parseKey(key);
     const card = cardsMap[cardId];
     if (!card) continue;
-
-    const type: 'mc' | 'written' =
-      useMC && useWritten
-        ? Math.random() < 0.5 ? 'mc' : 'written'
-        : useWritten ? 'written' : 'mc';
 
     if (type === 'mc') {
       const others = allCards.filter((c: any) => c.cardId !== cardId);
@@ -59,6 +85,7 @@ function buildRoundQuestions(
         .map((c: any) => c.contentBack);
       const opts = [card.contentBack, ...wrong].sort(() => Math.random() - 0.5);
       list.push({
+        key,
         cardId,
         type: 'mc',
         questionText: card.contentFront,
@@ -68,6 +95,7 @@ function buildRoundQuestions(
       });
     } else {
       list.push({
+        key,
         cardId,
         type: 'written',
         questionText: card.contentFront,
@@ -136,17 +164,23 @@ export default function QuizScreen() {
   const settingsRef = useRef<StudySettings>(defaultStudySettings);
 
   // ─── Round system ─────────────────────────────────────────────────────────
+  // Pools hold question keys (cardId+type), not raw cardIds — so with
+  // both MC and Written enabled, each card has two separate questions.
 
-  const [pendingPool, setPendingPool] = useState<string[]>([]);
+  const [pendingPool, setPendingPool] = useState<QuestionKey[]>([]);
   const [currentBatch, setCurrentBatch] = useState<QuizQuestion[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
-  const [wrongInRound, setWrongInRound] = useState<string[]>([]);
+  const [wrongInRound, setWrongInRound] = useState<QuestionKey[]>([]);
   const [roundCorrect, setRoundCorrect] = useState(0);
   const [roundWrong, setRoundWrong] = useState(0);
   const [roundNumber, setRoundNumber] = useState(1);
   const [showRoundSummary, setShowRoundSummary] = useState(false);
   const [sessionFinished, setSessionFinished] = useState(false);
   const [totalCards, setTotalCards] = useState(0);
+  // Total questions the user must answer correctly (cards × enabled types)
+  // and how many they've gotten right so far across the whole session.
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [correctTotal, setCorrectTotal] = useState(0);
 
   // ─── Question state ───────────────────────────────────────────────────────
 
@@ -228,11 +262,19 @@ export default function QuizScreen() {
 
       setTotalCards(cardIds.length);
 
-      const batchSize = getRandomBatchSize(cardIds.length);
-      const firstBatchIds = cardIds.slice(0, batchSize);
-      const remaining = cardIds.slice(batchSize);
+      // Expand each card into one question per enabled type (MC + Written → 2 questions/card).
+      let allKeys = expandCardsToKeys(cardIds, loadedSettings);
+      if (loadedSettings.shuffleTerms) {
+        allKeys = [...allKeys].sort(() => Math.random() - 0.5);
+      }
+      setTotalQuestions(allKeys.length);
+      setCorrectTotal(0);
 
-      setCurrentBatch(buildRoundQuestions(firstBatchIds, map, cards, loadedSettings));
+      const batchSize = getRandomBatchSize(allKeys.length);
+      const firstBatchKeys = allKeys.slice(0, batchSize);
+      const remaining = allKeys.slice(batchSize);
+
+      setCurrentBatch(buildRoundQuestions(firstBatchKeys, map, cards));
       setPendingPool(remaining);
     } catch (err) {
       console.error('Quiz init error:', err);
@@ -304,7 +346,7 @@ export default function QuizScreen() {
   };
 
   const startNextRound = async () => {
-    const newPool = [...wrongInRound, ...pendingPool];
+    const newPool: QuestionKey[] = [...wrongInRound, ...pendingPool];
 
     if (newPool.length === 0) {
       if (!isFilteredMode && sessionIdRef.current) {
@@ -316,11 +358,11 @@ export default function QuizScreen() {
     }
 
     const batchSize = getRandomBatchSize(newPool.length);
-    const batchCardIds = newPool.slice(0, batchSize);
+    const batchKeys = newPool.slice(0, batchSize);
     const remaining = newPool.slice(batchSize);
 
     setCurrentBatch(
-      buildRoundQuestions(batchCardIds, cardsMapRef.current, allCardsRef.current, settingsRef.current),
+      buildRoundQuestions(batchKeys, cardsMapRef.current, allCardsRef.current),
     );
     setPendingPool(remaining);
     setBatchIndex(0);
@@ -340,10 +382,11 @@ export default function QuizScreen() {
     setIsCorrect(correct);
     if (correct) {
       setRoundCorrect(prev => prev + 1);
+      setCorrectTotal(prev => prev + 1);
       playSound('correct');
       scheduleAutoAdvance();
     } else {
-      setWrongInRound(prev => [...prev, currentQuestion.cardId]);
+      setWrongInRound(prev => [...prev, currentQuestion.key]);
       setRoundWrong(prev => prev + 1);
     }
     await submitReview(correct);
@@ -356,10 +399,11 @@ export default function QuizScreen() {
     setIsCorrect(correct);
     if (correct) {
       setRoundCorrect(prev => prev + 1);
+      setCorrectTotal(prev => prev + 1);
       playSound('correct');
       scheduleAutoAdvance();
     } else {
-      setWrongInRound(prev => [...prev, currentQuestion.cardId]);
+      setWrongInRound(prev => [...prev, currentQuestion.key]);
       setRoundWrong(prev => prev + 1);
     }
     await submitReview(correct);
@@ -375,7 +419,10 @@ export default function QuizScreen() {
     );
   }
 
-  if (!currentBatch.length && !showRoundSummary && !sessionFinished) {
+  // Treat "no current question" the same as an empty batch — guards against
+  // a brief state transition (e.g. round restart) where batchIndex points
+  // past the new batch before it's been populated.
+  if ((!currentBatch.length || !currentQuestion) && !showRoundSummary && !sessionFinished) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16 }}>
@@ -394,7 +441,7 @@ export default function QuizScreen() {
         <Ionicons name="checkmark-circle" size={80} color="#10b981" style={{ marginBottom: 16 }} />
         <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>Tuyệt vời!</Text>
         <Text style={{ fontSize: 16, color: theme.textMuted, marginBottom: 32, textAlign: 'center' }}>
-          Bạn đã hoàn thành tất cả {totalCards} thẻ.
+          Bạn đã hoàn thành tất cả {totalQuestions} câu trên {totalCards} thẻ.
         </Text>
         <TouchableOpacity style={[styles.actionButton, { width: 200 }]} onPress={() => router.back()}>
           <Text style={styles.actionButtonText}>Hoàn tất</Text>
@@ -437,9 +484,13 @@ export default function QuizScreen() {
 
           {pendingPool.length > 0 && (
             <Text style={[styles.pendingNote, { color: theme.textMuted }]}>
-              Còn {pendingPool.length} thẻ chưa học
+              Còn {pendingPool.length} câu chưa học
             </Text>
           )}
+
+          <Text style={[styles.pendingNote, { color: theme.textMuted, marginTop: 6 }]}>
+            Còn lại tổng cộng: {Math.max(totalQuestions - correctTotal, 0)}/{totalQuestions} câu
+          </Text>
 
           <TouchableOpacity
             style={[styles.actionButton, { marginTop: 40 }]}
@@ -497,6 +548,11 @@ export default function QuizScreen() {
     ? (isDark ? '#0a2318' : '#f0fdf4')
     : theme.background;
 
+  // Remaining questions across the whole session — decreases only on
+  // correct answers, so wrong answers leave it unchanged (the question
+  // will come back next round).
+  const questionsRemaining = Math.max(totalQuestions - correctTotal, 0);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: screenBg }]}>
       <WebContainer maxWidth={900}>
@@ -505,10 +561,15 @@ export default function QuizScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
             <Ionicons name="close" size={28} color={theme.iconColor} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            {filterLabel ? `${filterLabel}  ` : ''}
-            {'Vòng '}{roundNumber}{'  ·  '}{batchIndex + 1}{'/'}{currentBatch.length}
-          </Text>
+          <View style={styles.headerCenter}>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>
+              {filterLabel ? `${filterLabel}  ` : ''}
+              {'Vòng '}{roundNumber}{'  ·  '}{batchIndex + 1}{'/'}{currentBatch.length}
+            </Text>
+            <Text style={[styles.headerRemaining, { color: theme.textMuted }]}>
+              Còn {questionsRemaining}/{totalQuestions} câu
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => router.push(`/quiz-settings/${deckId}` as any)}
@@ -517,9 +578,10 @@ export default function QuizScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Progress */}
+        {/* Progress: full-session fill driven by correct-answer count, so
+            wrong answers leave the bar where it was (the question returns later). */}
         <View style={[styles.progressBg, { backgroundColor: isDark ? '#27272a' : '#e5e7eb' }]}>
-          <View style={[styles.progressFill, { width: `${(batchIndex / currentBatch.length) * 100}%` }]} />
+          <View style={[styles.progressFill, { width: `${(correctTotal / Math.max(totalQuestions, 1)) * 100}%` }]} />
         </View>
       </WebContainer>
 
@@ -675,7 +737,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
+  headerCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: 'bold' },
+  headerRemaining: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   iconButton: { padding: 8 },
   progressBg: { height: 4, width: '100%' },
   progressFill: { height: '100%', backgroundColor: '#5865F2' },

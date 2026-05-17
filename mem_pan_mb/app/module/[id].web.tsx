@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck } from '../../services/api';
+
+function buildDeckShareUrl(deckId: string): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/module/${deckId}`;
+  }
+  return `/module/${deckId}`;
+}
 
 // Reusable hoverable wrapper
 function HoverableCard({ children, style, onPress, theme, disabled }: any) {
@@ -158,6 +165,36 @@ export default function ModuleDetailWebScreen() {
       setShowFolderSelectModal(false);
       Alert.alert('Thành công', 'Đã thêm học phần vào thư mục');
     } catch (error: any) { }
+  };
+
+  const handleShareDeck = async () => {
+    const url = buildDeckShareUrl(id as string);
+    setShowOptionsModal(false);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url);
+        Alert.alert('Đã sao chép', 'Đường dẫn học phần đã được sao chép.');
+        return;
+      } catch { }
+    }
+    Alert.alert('Đường dẫn', url);
+  };
+
+  const handleCloneDeck = async () => {
+    setShowOptionsModal(false);
+    try {
+      const res = await cloneDeck(id as string);
+      const newId = res?.deck?.deckId;
+      if (newId) {
+        Alert.alert('Đã sao chép', 'Bản sao học phần đã được tạo.', [
+          { text: 'OK', onPress: () => router.replace(`/module/${newId}` as any) },
+        ]);
+      } else {
+        Alert.alert('Đã sao chép', 'Bản sao học phần đã được tạo.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể sao chép học phần');
+    }
   };
 
   const handleOpenCardEdit = (card: any) => {
@@ -333,6 +370,45 @@ export default function ModuleDetailWebScreen() {
         </View>
       </ScrollView>
 
+      {/* Options Modal (web) */}
+      <Modal visible={showOptionsModal} transparent={true} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowOptionsModal(false)}>
+          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Tùy chọn</Text>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleOpenFolderSelect}>
+              <Ionicons name="folder-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Thêm vào thư mục</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => {
+              setEditName(deckData.name);
+              setEditDesc(deckData.description || '');
+              setShowOptionsModal(false);
+              setShowEditModal(true);
+            }}>
+              <Ionicons name="pencil-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Sửa</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleCloneDeck}>
+              <Ionicons name="copy-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Sao chép học phần</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleShareDeck}>
+              <Ionicons name="share-social-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Chia sẻ</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleDeleteDeck}>
+              <Ionicons name="trash-outline" size={22} color="#ef4444" />
+              <Text style={[styles.optionRowText, { color: '#ef4444' }]}>Xóa</Text>
+            </HoverableCard>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setShowOptionsModal(false)} style={styles.btnSecondary}>
+                <Text style={{ color: theme.text }}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Edit Deck Modal reused minimally */}
       <Modal visible={showEditModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
@@ -430,4 +506,8 @@ const styles = StyleSheet.create({
 
   folderSelectItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8 },
   folderSelectItemText: { flex: 1, fontSize: 16, marginLeft: 12 },
+
+  optionsModalContent: { width: 360, padding: 20, borderRadius: 16, borderWidth: 1, gap: 8 },
+  optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, gap: 12 },
+  optionRowText: { fontSize: 16, fontWeight: '500' },
 });

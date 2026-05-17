@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, FlatList, ActivityIndicator, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, View, FlatList, ActivityIndicator, TouchableOpacity, Text, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { searchCards, searchDecks, searchFolders, searchUsers } from '@/services/api';
+import { searchDecks, searchUsers } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useRouter } from 'expo-router';
 import { WebContainer } from '@/components/ui/WebContainer';
 
-const TABS = ['Bộ thẻ', 'Thẻ', 'Thư mục', 'Người dùng'];
+const TABS = ['Bộ thẻ', 'Người dùng'];
 
 export default function SearchScreen() {
     const router = useRouter();
@@ -34,12 +34,6 @@ export default function SearchScreen() {
                 res = await searchDecks(query);
                 items = res.decks || [];
             } else if (activeTab === 1) {
-                res = await searchCards(query);
-                items = res.cards || [];
-            } else if (activeTab === 2) {
-                res = await searchFolders(query);
-                items = res.folders || [];
-            } else if (activeTab === 3) {
                 res = await searchUsers(query);
                 items = res.users || [];
             }
@@ -66,34 +60,30 @@ export default function SearchScreen() {
                     <ThemedView style={styles.card}>
                         <ThemedText style={styles.title}>{item.name}</ThemedText>
                         {item.description ? <ThemedText style={styles.desc} numberOfLines={2}>{item.description}</ThemedText> : null}
-                        <ThemedText style={styles.meta}><Ionicons name="documents-outline" /> {item.cardCount || 0} cards</ThemedText>
+                        <ThemedText style={styles.meta}>{item.cardCount || 0} thẻ</ThemedText>
+                        {item.creatorUsername ? <ThemedText style={styles.meta}>Tác giả: {item.creatorUsername}</ThemedText> : null}
                     </ThemedView>
                 </TouchableOpacity>
             );
         } else if (activeTab === 1) {
+            const displayName = item.fullName || item.username || '';
+            const initial = (displayName || 'U').charAt(0).toUpperCase();
             return (
-                <TouchableOpacity onPress={() => router.push(`/module/${item.deckId}` as any)}>
+                <TouchableOpacity onPress={() => router.push(`/user/${item.userId || item.id}` as any)}>
                     <ThemedView style={styles.card}>
-                        <ThemedText style={styles.title} numberOfLines={2}>{item.contentFront}</ThemedText>
-                        <ThemedText style={styles.desc} numberOfLines={2}>{item.contentBack}</ThemedText>
-                    </ThemedView>
-                </TouchableOpacity>
-            );
-        } else if (activeTab === 2) {
-            return (
-                <TouchableOpacity onPress={() => router.push(`/folder/${item.folderId}` as any)}>
-                    <ThemedView style={styles.card}>
-                        <ThemedText style={styles.title}><Ionicons name="folder-outline" /> {item.name}</ThemedText>
-                        {item.description ? <ThemedText style={styles.desc}>{item.description}</ThemedText> : null}
-                    </ThemedView>
-                </TouchableOpacity>
-            );
-        } else if (activeTab === 3) {
-            return (
-                <TouchableOpacity onPress={() => router.push(`/user/${item.userId}` as any)}>
-                    <ThemedView style={styles.card}>
-                        <ThemedText style={styles.title}>{item.fullName || item.username}</ThemedText>
-                        <ThemedText style={styles.meta}>@{item.username}</ThemedText>
+                        <View style={styles.userRow}>
+                            {item.avatarUrl ? (
+                                <Image source={{ uri: item.avatarUrl }} style={styles.userAvatar} />
+                            ) : (
+                                <View style={[styles.userAvatar, styles.userAvatarFallback]}>
+                                    <Text style={styles.userAvatarText}>{initial}</Text>
+                                </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                                <ThemedText style={styles.title}>{displayName}</ThemedText>
+                                {item.username ? <ThemedText style={styles.meta}>@{item.username}</ThemedText> : null}
+                            </View>
+                        </View>
                     </ThemedView>
                 </TouchableOpacity>
             );
@@ -201,5 +191,25 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingTop: 50,
-    }
+    },
+    userRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    userAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        marginRight: 12,
+    },
+    userAvatarFallback: {
+        backgroundColor: '#5865F2',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    userAvatarText: {
+        color: '#ffffff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
 });

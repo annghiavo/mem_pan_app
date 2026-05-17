@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { ReportSheet } from '../../components/ui/ReportSheet';
+
+// Build a shareable URL for a deck. On web we use the current origin so the
+// link is directly visitable; on native we fall back to a deep link.
+function buildDeckShareUrl(deckId: string): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/module/${deckId}`;
+  }
+  return `mempanmb://module/${deckId}`;
+}
 
 const langNameMap: Record<string, string> = {
   vi: 'Tiếng Việt',
@@ -144,6 +153,42 @@ export default function ModuleDetailScreen() {
       Alert.alert('Thành công', 'Đã thêm học phần vào thư mục');
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể thêm vào thư mục');
+    }
+  };
+
+  const handleShareDeck = async () => {
+    const url = buildDeckShareUrl(id as string);
+    setShowOptionsModal(false);
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url);
+        Alert.alert('Đã sao chép', 'Đường dẫn học phần đã được sao chép.');
+      } catch {
+        Alert.alert('Đường dẫn', url);
+      }
+      return;
+    }
+    try {
+      await Share.share({ message: url, url });
+    } catch {
+      Alert.alert('Đường dẫn', url);
+    }
+  };
+
+  const handleCloneDeck = async () => {
+    setShowOptionsModal(false);
+    try {
+      const res = await cloneDeck(id as string);
+      const newId = res?.deck?.deckId;
+      if (newId) {
+        Alert.alert('Đã sao chép', 'Bản sao học phần đã được tạo.', [
+          { text: 'OK', onPress: () => router.replace(`/module/${newId}` as any) },
+        ]);
+      } else {
+        Alert.alert('Đã sao chép', 'Bản sao học phần đã được tạo.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể sao chép học phần');
     }
   };
 
@@ -379,7 +424,11 @@ export default function ModuleDetailScreen() {
               <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Sửa</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]}>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleCloneDeck}>
+              <Ionicons name="copy-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Sao chép học phần</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleShareDeck}>
               <Ionicons name="share-social-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Chia sẻ</Text>
             </TouchableOpacity>
