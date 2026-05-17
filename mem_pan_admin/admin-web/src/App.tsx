@@ -5,7 +5,9 @@ import { useAuthStore } from "./store/authStore";
 import LoginPage from "./pages/LoginPage";
 import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
+import UserDetailPage from "./pages/UserDetailPage";
 import DecksPage from "./pages/DecksPage";
+import DeckDetailPage from "./pages/DeckDetailPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
 import ModeratorsPage from "./pages/ModeratorsPage";
 
@@ -58,7 +60,9 @@ export default function App() {
 
           <Route path="/reports" element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
+          <Route path="/users/:id" element={<PrivateRoute><UserDetailPage /></PrivateRoute>} />
           <Route path="/decks" element={<PrivateRoute><DecksPage /></PrivateRoute>} />
+          <Route path="/decks/:id" element={<PrivateRoute><DeckDetailPage /></PrivateRoute>} />
           <Route
             path="/email-templates"
             element={

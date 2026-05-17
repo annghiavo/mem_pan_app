@@ -1,10 +1,17 @@
+import { Link } from "react-router-dom";
 import type { Report } from "../../types/admin";
 import StatusBadge from "../common/StatusBadge";
-
+import { ExternalLink } from "lucide-react";
 
 interface Props {
   reports: Report[];
   onAction: (report: Report) => void;
+}
+
+function targetHref(report: Report): string | null {
+  if (report.targetType === "user") return `/users/${encodeURIComponent(report.targetId)}`;
+  if (report.targetType === "deck") return `/decks/${encodeURIComponent(report.targetId)}`;
+  return null;
 }
 
 export default function ReportTable({ reports, onAction }: Props) {
@@ -34,8 +41,34 @@ export default function ReportTable({ reports, onAction }: Props) {
                 onMouseEnter={e => e.currentTarget.style.background = "var(--bg-surface-hover)"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <td style={{ padding: "1rem" }}>
-                <div style={{ fontWeight: 500 }}>{report.targetType}</div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>{report.targetId}</div>
+                <div style={{ fontWeight: 500, textTransform: "capitalize" }}>{report.targetType}</div>
+                {(() => {
+                  const href = targetHref(report);
+                  if (!href) {
+                    return (
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>
+                        {report.targetId}
+                      </div>
+                    );
+                  }
+                  return (
+                    <Link
+                      to={href}
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--accent-primary)",
+                        fontFamily: "monospace",
+                        marginTop: "0.25rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                      }}
+                    >
+                      {report.targetId}
+                      <ExternalLink size={11} />
+                    </Link>
+                  );
+                })()}
               </td>
               <td style={{ padding: "1rem" }}>
                 <span style={{ fontSize: "0.875rem", background: "var(--bg-surface)", padding: "0.25rem 0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>

@@ -6,8 +6,8 @@ import ProcessReportModal from "../components/reports/ProcessReportModal";
 import type { Report } from "../types/admin";
 import { AlertCircle, FileWarning } from "lucide-react";
 
-const STATUS_FILTERS = ["", "pending", "reviewing", "resolved", "dismissed"] as const;
-const FILTER_LABELS = ["All", "Pending", "Reviewing", "Resolved", "Dismissed"];
+const STATUS_FILTERS = ["", "pending", "resolved", "dismissed"] as const;
+const FILTER_LABELS = ["All", "Pending", "Resolved", "Dismissed"];
 
 export default function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState("");

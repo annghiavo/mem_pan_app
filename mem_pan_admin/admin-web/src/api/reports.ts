@@ -1,5 +1,5 @@
 import { adminApi } from "./client";
-import type { Report } from "../types/admin";
+import type { Report, ReportAction } from "../types/admin";
 
 export interface ListReportsParams {
   pageSize?: number;
@@ -18,12 +18,17 @@ export const listReports = (params: ListReportsParams) =>
     .then((r) => r.data);
 
 export interface ProcessReportPayload {
-  action: "resolve" | "dismiss" | "review";
-  resolution?: "banned" | "deleted" | "warned" | "no_action";
+  action: ReportAction;
   adminNote?: string;
+}
+
+export interface ProcessReportResponse {
+  report: Report;
+  affectedReports: number;
+  notifiedReporters: number;
 }
 
 export const processReport = (reportId: string, body: ProcessReportPayload) =>
   adminApi
-    .patch<{ report: Report }>(`/v1/admin/reports/${reportId}`, body)
-    .then((r) => r.data.report);
+    .patch<ProcessReportResponse>(`/v1/admin/reports/${reportId}`, body)
+    .then((r) => r.data);

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebContainer } from '../../components/ui/WebContainer';
+import { showAlert } from '../../utils/alert';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -38,20 +39,18 @@ export default function RegisterScreen() {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error("Non-JSON response from server:", responseText);
-        Alert.alert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
+        showAlert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
         setLoading(false);
         return;
       }
 
       if (response.ok) {
-        Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
-          { text: 'Đăng nhập ngay', onPress: () => router.replace('/(auth)/login' as any) }
-        ]);
+        showAlert('Thành công', 'Đăng ký tài khoản thành công!', () => router.replace('/(auth)/login' as any));
       } else {
-        Alert.alert('Lỗi đăng ký', data.message || 'Có lỗi xảy ra, vui lòng thử lại.');
+        showAlert('Lỗi đăng ký', data.message || 'Có lỗi xảy ra, vui lòng thử lại.');
       }
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể kết nối đến máy chủ.');
+      showAlert('Lỗi', 'Không thể kết nối đến máy chủ.');
       console.error(error);
     } finally {
       setLoading(false);

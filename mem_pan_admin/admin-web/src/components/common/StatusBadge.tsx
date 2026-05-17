@@ -4,7 +4,6 @@ interface StatusBadgeProps {
 
 const COLORS: Record<string, { bg: string, text: string }> = {
   pending:   { bg: "rgba(245, 158, 11, 0.15)", text: "hsl(40, 90%, 55%)" },
-  reviewing: { bg: "rgba(59, 130, 246, 0.15)", text: "hsl(217, 90%, 65%)" },
   resolved:  { bg: "rgba(16, 185, 129, 0.15)", text: "hsl(150, 60%, 45%)" },
   dismissed: { bg: "rgba(107, 114, 128, 0.15)", text: "hsl(220, 10%, 60%)" },
 };

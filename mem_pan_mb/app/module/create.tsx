@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'react-native';
 import { WebContainer } from '../../components/ui/WebContainer';
+import { showAlert } from '../../utils/alert';
 
 interface Term {
   id: string;
@@ -197,18 +198,18 @@ export default function CreateModuleScreen() {
         setTerms([...currentTerms, ...newTerms]);
         setTimeout(() => {
           hideImportOverlay();
-          Alert.alert('Thành công', `Đã nhập ${parsedData.total || newTerms.length} thẻ`);
+          showAlert('Thành công', `Đã nhập ${parsedData.total || newTerms.length} thẻ`);
         }, 600);
       } else {
         setTimeout(() => {
           hideImportOverlay();
-          Alert.alert('Thông báo', 'Không tìm thấy thẻ nào trong tệp');
+          showAlert('Thông báo', 'Không tìm thấy thẻ nào trong tệp');
         }, 600);
       }
     } catch (error: any) {
       stopProgress();
       hideImportOverlay();
-      Alert.alert('Lỗi', error.message || 'Không thể nhập tệp');
+      showAlert('Lỗi', error.message || 'Không thể nhập tệp');
     } finally {
       setIsLoading(false);
     }
@@ -216,13 +217,13 @@ export default function CreateModuleScreen() {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tiêu đề học phần');
+      showAlert('Lỗi', 'Vui lòng nhập tiêu đề học phần');
       return;
     }
 
     const validTerms = terms.filter(t => t.term.trim() || t.definition.trim());
     if (validTerms.length === 0) {
-      Alert.alert('Lỗi', 'Vui lòng nhập ít nhất một thuật ngữ');
+      showAlert('Lỗi', 'Vui lòng nhập ít nhất một thuật ngữ');
       return;
     }
 
@@ -263,10 +264,14 @@ export default function CreateModuleScreen() {
         }
       }
 
-      Alert.alert('Thành công', 'Đã tạo học phần');
-      router.back();
+      if (Platform.OS === 'web') {
+        showAlert('Thành công', 'Đã tạo học phần', () => router.back());
+      } else {
+        showAlert('Thành công', 'Đã tạo học phần');
+        router.back();
+      }
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Không thể tạo học phần');
+      showAlert('Lỗi', error.message || 'Không thể tạo học phần');
     } finally {
       setIsLoading(false);
     }

@@ -1,4 +1,4 @@
-export type ReportStatus = "pending" | "reviewing" | "resolved" | "dismissed";
+export type ReportStatus = "pending" | "resolved" | "dismissed";
 export type ReportCategory =
   | "inappropriate_content"
   | "copyright_violation"
@@ -6,19 +6,19 @@ export type ReportCategory =
   | "harassment"
   | "misinformation"
   | "other";
-export type Resolution = "banned" | "deleted" | "warned" | "no_action";
+export type Resolution = "banned" | "deck_hidden" | "deck_deleted";
+export type ReportAction = "ban_user" | "hide_deck" | "delete_deck" | "dismiss";
 
 export interface Report {
   reportId: string;
   reporterId: string;
-  targetType: "deck" | "user" | "note";
+  targetType: "deck" | "user";
   targetId: string;
   reasonCategory: ReportCategory;
   description: string;
   status: ReportStatus;
-  assignedTo?: string;
   adminNote?: string;
-  resolution?: Resolution;
+  resolution?: Resolution | "";
   resolvedBy?: string;
   resolvedAt?: string;
   createdAt: string;
