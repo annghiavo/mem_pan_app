@@ -397,9 +397,16 @@ export const finishStudySession = (sessionId: string) => {
 };
 
 export const reviewCard = (sessionId: string, cardId: string, rating: number, durationMs: number) => {
+  // Forward the device's IANA timezone so stats-service can bucket the
+  // review into the right local hour and day for the activity histogram +
+  // streak boundary. Required by the reminder cron jobs.
+  let timezone = 'UTC';
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch { /* keep default */ }
   return request(`/study/sessions/${sessionId}/review`, {
     method: 'POST',
-    body: JSON.stringify({ cardId, rating, durationMs }),
+    body: JSON.stringify({ cardId, rating, durationMs, timezone }),
   });
 };
 
@@ -443,6 +450,16 @@ export const getUserHeatmap = (fromDate?: string, toDate?: string) => {
 };
 
 export const getUserDeckStats = () => request('/stats/me/decks');
+
+// Sends the device's IANA timezone (e.g. "Asia/Ho_Chi_Minh") to the backend.
+// Used by the reminder cron jobs to compute the correct local time for the
+// streak boundary and study-reminder send time. Safe to call repeatedly.
+export const updateUserTimezone = (timezone: string) => {
+  return request('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ timezone }),
+  });
+};
 
 // --- Notifications ---
 export const registerDeviceToken = (token: string, deviceName: string = '') => {

@@ -657,5 +657,7 @@ The proxy approach is zero-config for development.
 | List users            | ⚠️ Not implemented   |
 | Ban / unban user      | ⚠️ Not implemented   |
 | Update deck status    | ⚠️ Not implemented   |
+| List decks            | ⚠️ Not implemented   |
+| Invisibility, delete deck/card    | ⚠️ Not implemented   |
 
 Build the Reports page first. Stub out the Users and Decks pages with a "Coming soon" message so the navigation is already in place when those endpoints are added.
