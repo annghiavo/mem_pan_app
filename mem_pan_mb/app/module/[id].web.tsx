@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck } from '../../services/api';
+import { devlog } from '../../services/devlog';
 
 function buildDeckShareUrl(deckId: string): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -92,13 +93,14 @@ export default function ModuleDetailWebScreen() {
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
 
   useEffect(() => {
+    devlog.event('module:mount', { deckId: id });
     const fetchDeckData = async () => {
       try {
         const [deckRes, cardsRes, progressRes, dueRes] = await Promise.all([
           getDeck(id as string),
           getDeckCards(id as string),
-          getDeckProgress(id as string).catch(() => null),
-          getDueCards(id as string).catch(() => ({ total: 0 }))
+          getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
+          getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; })
         ]);
         setDeckData(deckRes.deck);
         setCreatorUsername(deckRes.creatorUsername || '');
@@ -106,8 +108,9 @@ export default function ModuleDetailWebScreen() {
         setCards(cardsRes.cards || []);
         setProgress(progressRes);
         setDueCount(dueRes?.total || 0);
+        devlog.info('module: deck loaded', { deckId: id, cardCount: cardsRes.cards?.length ?? 0, dueCount: dueRes?.total ?? 0 });
       } catch (error) {
-        console.error('Error fetching deck:', error);
+        devlog.error('module: failed to load deck', error, { deckId: id });
       } finally {
         setLoading(false);
       }
@@ -198,6 +201,7 @@ export default function ModuleDetailWebScreen() {
   };
 
   const handleOpenCardEdit = (card: any) => {
+    devlog.event('card:edit:open', { cardId: card?.cardId });
     setEditingCard(card);
     setCardFront(card.contentFront);
     setCardBack(card.contentBack);
@@ -206,7 +210,11 @@ export default function ModuleDetailWebScreen() {
   };
 
   const handleUpdateCard = async () => {
-    if (!cardFront.trim() || !cardBack.trim()) return;
+    devlog.event('card:edit:submit', { cardId: editingCard?.cardId });
+    if (!cardFront.trim() || !cardBack.trim()) {
+      devlog.warn('card:edit aborted — empty front/back');
+      return;
+    }
     setIsUpdatingCard(true);
     try {
       const res = await updateCard(editingCard.cardId, {
@@ -216,23 +224,32 @@ export default function ModuleDetailWebScreen() {
       const updatedCards = cards.map(c => c.cardId === editingCard.cardId ? { ...c, ...res.card } : c);
       setCards(updatedCards);
       setShowCardEditModal(false);
-    } catch (error: any) { } finally {
+      devlog.info('card:edit:success', { cardId: editingCard.cardId });
+    } catch (error: any) {
+      devlog.error('card:edit:failed', error, { cardId: editingCard?.cardId });
+    } finally {
       setIsUpdatingCard(false);
     }
   };
 
   const handleDeleteCard = async (cardId: string) => {
-    Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa?', [
-      { text: 'Hủy' },
-      {
-        text: 'Xóa', onPress: async () => {
-          try {
-            await deleteCard(cardId);
-            setCards(cards.filter(c => c.cardId !== cardId));
-          } catch (error: any) { }
-        }
+    devlog.event('card:delete:click', { cardId });
+    // RN Web's Alert.alert ignores the button array, so the confirm callback
+    // never fires. Use the browser's native confirm dialog instead.
+    if (typeof window !== 'undefined' && !window.confirm('Bạn có chắc muốn xóa thẻ này?')) {
+      devlog.info('card:delete cancelled by user', { cardId });
+      return;
+    }
+    try {
+      await deleteCard(cardId);
+      setCards(cards.filter(c => c.cardId !== cardId));
+      devlog.info('card:delete:success', { cardId });
+    } catch (error: any) {
+      devlog.error('card:delete:failed', error, { cardId });
+      if (typeof window !== 'undefined') {
+        window.alert(error?.message || 'Không thể xóa thẻ');
       }
-    ]);
+    }
   };
 
   if (!deckData) {
@@ -438,6 +455,45 @@ export default function ModuleDetailWebScreen() {
             </ScrollView>
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setShowFolderSelectModal(false)} style={styles.btnSecondary}><Text style={{ color: theme.text }}>Đóng</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Card Modal (web) */}
+      <Modal visible={showCardEditModal} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Sửa thẻ</Text>
+            <Text style={[{ color: theme.text, marginBottom: 6, marginTop: 4 }]}>Thuật ngữ</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+              value={cardFront}
+              onChangeText={setCardFront}
+              placeholder="Nhập thuật ngữ"
+              placeholderTextColor={theme.textMuted}
+              multiline
+            />
+            <Text style={[{ color: theme.text, marginBottom: 6, marginTop: 12 }]}>Định nghĩa</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+              value={cardBack}
+              onChangeText={setCardBack}
+              placeholder="Nhập định nghĩa"
+              placeholderTextColor={theme.textMuted}
+              multiline
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setShowCardEditModal(false)} style={styles.btnSecondary} disabled={isUpdatingCard}>
+                <Text style={{ color: theme.text }}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleUpdateCard} style={styles.btnPrimary} disabled={isUpdatingCard || !cardFront.trim() || !cardBack.trim()}>
+                {isUpdatingCard ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff' }}>Lưu</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>

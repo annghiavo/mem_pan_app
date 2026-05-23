@@ -6,6 +6,11 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { bootstrapNotifications } from '@/services/notifications';
+import { installGlobalErrorHandlers, devlog } from '@/services/devlog';
+
+// Install once at module load so we capture errors that happen before
+// any component mounts (e.g. during initial async imports).
+installGlobalErrorHandlers();
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -17,7 +22,9 @@ export default function RootLayout() {
   // Register FCM token + report device timezone once the app is mounted.
   // Safe to run before login: bootstrapNotifications no-ops if auth is missing.
   useEffect(() => {
+    devlog.event('app:mount');
     bootstrapNotifications();
+    return () => devlog.event('app:unmount');
   }, []);
 
   return (

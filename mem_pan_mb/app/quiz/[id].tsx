@@ -192,6 +192,11 @@ export default function QuizScreen() {
   const [cardStartTime, setCardStartTime] = useState(Date.now());
 
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The server stores one review per (sessionId, cardId). With both MC and
+  // Written enabled, the same cardId appears in the question pool twice — we
+  // submit only the first attempt to avoid 409 (already reviewed) or 400
+  // (session auto-finished after the first card's review).
+  const submittedCardsRef = useRef<Set<string>>(new Set());
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -221,6 +226,7 @@ export default function QuizScreen() {
 
   const initSession = useCallback(async () => {
     setLoading(true);
+    submittedCardsRef.current = new Set();
     try {
       const [cardsRes, settingsRes] = await Promise.all([
         getDeckCards(deckId),
@@ -317,6 +323,8 @@ export default function QuizScreen() {
 
   const submitReview = async (correct: boolean) => {
     if (isFilteredMode || !sessionIdRef.current || !currentQuestion) return;
+    if (submittedCardsRef.current.has(currentQuestion.cardId)) return;
+    submittedCardsRef.current.add(currentQuestion.cardId);
     const durationMs = Date.now() - cardStartTime;
     const rating = !correct ? 1 : durationMs < 3000 ? 4 : durationMs < 8000 ? 3 : 2;
     try { await reviewCard(sessionIdRef.current, currentQuestion.cardId, rating, durationMs); } catch { }

@@ -45,7 +45,7 @@ export default function HomeWebScreen() {
     const [recentDecks, setRecentDecks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [username, setUsername] = useState('M');
+    const [username, setUsername] = useState('');
 
     const fetchData = useCallback(async () => {
         let recentSessionDecks: any[] = [];

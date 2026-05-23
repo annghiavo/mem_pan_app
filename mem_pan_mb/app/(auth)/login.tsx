@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { showAlert } from '../../utils/alert';
+import { devlog } from '../../services/devlog';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,20 +30,28 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!identifier || !password) return;
+    devlog.event('login:submit', { identifierLen: identifier.length });
+    if (!identifier || !password) {
+      devlog.warn('login:submit aborted — empty field');
+      return;
+    }
 
     setLoading(true);
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const url = `${apiUrl}/auth/login`;
+      const body = JSON.stringify({
+        email: identifier, // Assuming backend accepts username/email in the email field or we just pass it as email
+        password: password,
+      });
+      const { logRequest, logResponse } = await import('../../services/api');
+      logRequest('POST', url, body);
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: identifier, // Assuming backend accepts username/email in the email field or we just pass it as email
-          password: password,
-        }),
+        body,
       });
 
       let data;
@@ -50,11 +59,13 @@ export default function LoginScreen() {
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error("Non-JSON response from server:", responseText);
+        logResponse('POST', url, response.status, `<invalid JSON> ${responseText}`);
+        devlog.error('login: non-JSON response from server', e, { snippet: responseText.slice(0, 200) });
         showAlert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
         setLoading(false);
         return;
       }
+      logResponse('POST', url, response.status, data);
 
       if (response.ok) {
         // Cập nhật token vào bộ nhớ tạm để gọi các API khác
@@ -68,14 +79,16 @@ export default function LoginScreen() {
           await setRefreshToken(rToken);
         }
 
+        devlog.event('login:success', { hasRefreshToken: !!rToken });
         showAlert('Thành công', 'Đăng nhập thành công!', () => router.replace('/(tabs)'));
         if (Platform.OS === 'web') return; // router.replace already called in showAlert callback
       } else {
+        devlog.warn('login:failed', { status: response.status, message: data?.message });
         showAlert('Lỗi đăng nhập', data.message || 'Tài khoản hoặc mật khẩu không chính xác.');
       }
     } catch (error) {
+      devlog.error('login: network/unknown error', error);
       showAlert('Lỗi', 'Không thể kết nối đến máy chủ.');
-      console.error(error);
     } finally {
       setLoading(false);
     }

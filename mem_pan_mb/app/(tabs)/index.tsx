@@ -23,7 +23,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [username, setUsername] = useState('M');
+  const [username, setUsername] = useState('');
 
   const fetchData = useCallback(async () => {
     const studyDeckIds = new Set<string>();
@@ -144,9 +144,9 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(profile)' as any)}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{(username || 'M').charAt(0).toUpperCase()}</Text>
-            )}
+            ) : username ? (
+              <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
+            ) : null}
           </TouchableOpacity>
         </View>
 

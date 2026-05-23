@@ -20,17 +20,21 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-      const response = await fetch(`${apiUrl}/auth/register`, {
+      const url = `${apiUrl}/auth/register`;
+      const body = JSON.stringify({
+        fullName,
+        username,
+        email,
+        password,
+      });
+      const { logRequest, logResponse } = await import('../../services/api');
+      logRequest('POST', url, body);
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fullName,
-          username,
-          email,
-          password,
-        }),
+        body,
       });
 
       let data;
@@ -38,11 +42,13 @@ export default function RegisterScreen() {
       try {
         data = JSON.parse(responseText);
       } catch (e) {
+        logResponse('POST', url, response.status, `<invalid JSON> ${responseText}`);
         console.error("Non-JSON response from server:", responseText);
         showAlert('Lỗi máy chủ', 'Máy chủ trả về dữ liệu không hợp lệ (có thể là trang HTML chặn truy cập).');
         setLoading(false);
         return;
       }
+      logResponse('POST', url, response.status, data);
 
       if (response.ok) {
         showAlert('Thành công', 'Đăng ký tài khoản thành công!', () => router.replace('/(auth)/login' as any));

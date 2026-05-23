@@ -1,7 +1,96 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1'; let authToken = '';
 let currentRefreshToken = '';
+
+// --- API call logging (dev only) ---
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const LOG_API = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+// Resolve the URL of the Metro dev server so we can POST log entries to its
+// /__devlog endpoint (handled by metro.config.js). This is how the app's
+// API calls end up printed in the `npx expo start` terminal.
+const resolveMetroDevLogUrl = (): string | null => {
+  if (!LOG_API) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c: any = Constants;
+  const hostUri: string | undefined =
+    c.expoConfig?.hostUri ||
+    c.expoGoConfig?.debuggerHost ||
+    c.manifest?.debuggerHost ||
+    c.manifest?.hostUri ||
+    c.manifest2?.extra?.expoGo?.debuggerHost;
+  if (!hostUri) return null;
+  // hostUri is host:port — strip any trailing path/query
+  const host = hostUri.split('/')[0].split('?')[0];
+  return `http://${host}/__devlog`;
+};
+
+const METRO_DEVLOG_URL = resolveMetroDevLogUrl();
+
+const sendDevLog = (entry: Record<string, unknown>) => {
+  if (!LOG_API || !METRO_DEVLOG_URL) return;
+  // Fire-and-forget. Never await, never throw.
+  try {
+    fetch(METRO_DEVLOG_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    }).catch(() => { /* ignore */ });
+  } catch { /* ignore */ }
+};
+
+if (LOG_API) {
+  console.log(`[API] logger active — base URL: ${API_URL}`);
+  if (METRO_DEVLOG_URL) {
+    console.log(`[API] piping logs to Metro dev server: ${METRO_DEVLOG_URL}`);
+    sendDevLog({ kind: 'info', message: `logger attached — base URL: ${API_URL}` });
+  } else {
+    console.log('[API] Metro dev-log endpoint not resolved (Constants.expoConfig.hostUri missing)');
+  }
+}
+
+const redact = (data: any): any => {
+  if (!data || typeof data !== 'object') return data;
+  if (Array.isArray(data)) return data.map(redact);
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = /password|token|secret|authorization/i.test(k) ? '***' : redact(v);
+  }
+  return out;
+};
+
+// In-memory map of request start times so logResponse can report duration.
+const requestStartedAt = new Map<string, number>();
+const reqKey = (method: string, url: string) => `${method} ${url}`;
+
+export const logRequest = (method: string, url: string, body?: any) => {
+  if (!LOG_API) return;
+  let parsed: any = body;
+  if (typeof body === 'string') {
+    try { parsed = JSON.parse(body); } catch { /* keep string */ }
+  } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    parsed = '<FormData>';
+  }
+  const safe = redact(parsed);
+  requestStartedAt.set(reqKey(method, url), Date.now());
+  console.log(`[API →] ${method} ${url}`, safe ?? '');
+  sendDevLog({ kind: 'request', method, url, body: safe });
+};
+
+export const logResponse = (method: string, url: string, status: number, data: any) => {
+  if (!LOG_API) return;
+  const startedAt = requestStartedAt.get(reqKey(method, url));
+  const durationMs = startedAt ? Date.now() - startedAt : undefined;
+  if (startedAt) requestStartedAt.delete(reqKey(method, url));
+  if (status >= 400) {
+    console.warn(`[API ✗] ${status} ${method} ${url}`, data);
+  } else {
+    console.log(`[API ←] ${status} ${method} ${url}`, data);
+  }
+  sendDevLog({ kind: 'response', method, url, status, data, durationMs });
+};
 
 export const setAuthToken = async (token: string) => {
   authToken = token;
@@ -24,14 +113,17 @@ export const clearAuth = async () => {
   await AsyncStorage.removeItem('refreshToken');
 };
 
-const handleResponse = async (response: Response) => {
+const handleResponse = async (response: Response, method = 'GET', url = '') => {
   const responseText = await response.text();
   let data;
   try {
     data = responseText ? JSON.parse(responseText) : {};
   } catch (e) {
+    logResponse(method, url, response.status, `<invalid JSON> ${responseText}`);
     throw new Error(`Invalid JSON response: ${responseText}`);
   }
+
+  logResponse(method, url, response.status, data);
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -68,12 +160,21 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const method = (options.method || 'GET').toUpperCase();
+  const url = `${API_URL}${endpoint}`;
+  logRequest(method, url, options.body);
 
-  return handleResponse(response);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    return await handleResponse(response, method, url);
+  } catch (err: any) {
+    if (LOG_API) console.error(`[API ✗] ${method} ${url}`, err?.message ?? err);
+    sendDevLog({ kind: 'error', method, url, message: String(err?.message ?? err) });
+    throw err;
+  }
 };
 
 // --- Auth & Users ---
@@ -126,7 +227,9 @@ export const uploadAvatar = async (uri: string, mimeType: string, fileName: stri
     name: fileName,
   } as any);
 
-  const response = await fetch(`${API_URL}/users/me/avatar`, {
+  const url = `${API_URL}/users/me/avatar`;
+  logRequest('POST', url, formData);
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${authToken}`,
@@ -134,7 +237,7 @@ export const uploadAvatar = async (uri: string, mimeType: string, fileName: stri
     body: formData,
   });
 
-  return handleResponse(response);
+  return handleResponse(response, 'POST', url);
 };
 
 // --- Decks ---
@@ -235,7 +338,9 @@ export const createCard = async (deckId: string, data: {
     formData.append('lang_back', data.langBack);
   }
 
-  const response = await fetch(`${API_URL}/decks/${deckId}/cards`, {
+  const url = `${API_URL}/decks/${deckId}/cards`;
+  logRequest('POST', url, formData);
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${authToken}`,
@@ -243,7 +348,7 @@ export const createCard = async (deckId: string, data: {
     body: formData,
   });
 
-  return handleResponse(response);
+  return handleResponse(response, 'POST', url);
 };
 
 export const bulkCreateCards = (deckId: string, cards: { contentFront: string; contentBack: string; imageUrl?: string; langFront?: string; langBack?: string }[]) => {
@@ -286,15 +391,18 @@ export const updateCard = async (cardId: string, data: {
     if (data.langFront !== undefined) body.lang_front = data.langFront;
     if (data.langBack !== undefined) body.lang_back = data.langBack;
 
-    const response = await fetch(`${API_URL}/cards/${cardId}`, {
+    const url = `${API_URL}/cards/${cardId}`;
+    const jsonBody = JSON.stringify(body);
+    logRequest('PUT', url, jsonBody);
+    const response = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify(body),
+      body: jsonBody,
     });
-    return handleResponse(response);
+    return handleResponse(response, 'PUT', url);
   }
 
   // New image file provided: send multipart FormData
@@ -310,7 +418,9 @@ export const updateCard = async (cardId: string, data: {
   if (data.langFront) formData.append('lang_front', data.langFront);
   if (data.langBack) formData.append('lang_back', data.langBack);
 
-  const response = await fetch(`${API_URL}/cards/${cardId}`, {
+  const url = `${API_URL}/cards/${cardId}`;
+  logRequest('PUT', url, formData);
+  const response = await fetch(url, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${authToken}`,
@@ -318,7 +428,7 @@ export const updateCard = async (cardId: string, data: {
     body: formData,
   });
 
-  return handleResponse(response);
+  return handleResponse(response, 'PUT', url);
 };
 
 export const deleteCard = (cardId: string) => {
@@ -501,7 +611,9 @@ export const parseImportFile = async (
   }
   formData.append('file_type', fileType);
 
-  const response = await fetch(`${API_URL}/import/parse`, {
+  const url = `${API_URL}/import/parse`;
+  logRequest('POST', url, formData);
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${authToken}`,
@@ -509,7 +621,7 @@ export const parseImportFile = async (
     body: formData,
   });
 
-  return handleResponse(response);
+  return handleResponse(response, 'POST', url);
 };
 
 // --- Search ---
