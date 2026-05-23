@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar, registerDeviceToken, unregisterDeviceToken } from '../../services/api';
+import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar, registerDeviceToken, unregisterDeviceToken, sendTestNotification } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { showAlert, showConfirm } from '../../utils/alert';
 
@@ -218,6 +218,38 @@ export default function SettingsScreen() {
     );
   };
 
+  const [sendingTestPush, setSendingTestPush] = useState(false);
+
+  const handleSendTestNotification = async (type: 'study_reminder' | 'streak_warning') => {
+    if (sendingTestPush) return;
+    try {
+      setSendingTestPush(true);
+      const res: any = await sendTestNotification({
+        notificationType: type,
+        dueCount: 5,
+        streak: 4,
+      });
+      const deviceCount = res?.deviceCount ?? res?.device_count ?? 0;
+      const title = res?.title ?? '';
+      const body = res?.body ?? '';
+      if (deviceCount === 0) {
+        showAlert(
+          'Chưa có thiết bị',
+          'Chưa có FCM token nào được đăng ký. Hãy bật "Thông báo đẩy" ở trên rồi thử lại.'
+        );
+      } else {
+        showAlert(
+          `Đã gửi (${deviceCount} thiết bị)`,
+          `${title}\n${body}`
+        );
+      }
+    } catch (e: any) {
+      showAlert('Lỗi', e?.message || 'Không gửi được thông báo test.');
+    } finally {
+      setSendingTestPush(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword) {
       showAlert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới');
@@ -327,6 +359,24 @@ export default function SettingsScreen() {
                 Linking.openURL('https://github.com/anprovip/mem_pan_app');
               })}
             </View>
+
+            {__DEV__ && (
+              <>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Debug</Text>
+                <View style={[styles.sectionContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+                  {renderSettingItem(
+                    sendingTestPush ? 'Đang gửi…' : 'Gửi thông báo test: Nhắc học',
+                    undefined,
+                    () => handleSendTestNotification('study_reminder')
+                  )}
+                  {renderSettingItem(
+                    sendingTestPush ? 'Đang gửi…' : 'Gửi thông báo test: Cảnh báo streak',
+                    undefined,
+                    () => handleSendTestNotification('streak_warning')
+                  )}
+                </View>
+              </>
+            )}
 
             <View style={styles.actionsContainer}>
               <TouchableOpacity

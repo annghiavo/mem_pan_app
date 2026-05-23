@@ -13,7 +13,7 @@
 // Call `bootstrapNotifications()` once on app start (e.g. from app/_layout.tsx)
 // AFTER the user is authenticated. It is safe to call multiple times.
 
-import { Platform } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
@@ -33,8 +33,29 @@ if (Platform.OS !== 'web') {
   }
 }
 
+// notifee is used to display a system notification when a push arrives while
+// the app is in the FOREGROUND. By contract, FCM's `notification` payload is
+// only auto-rendered by the OS when the app is in the background/killed — so
+// without notifee, foreground messages would only fire `onMessage` and the
+// user would see nothing.
+let notifee: any = null;
+let AndroidImportance: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    const mod = require('@notifee/react-native');
+    notifee = mod.default;
+    AndroidImportance = mod.AndroidImportance;
+  } catch (e) {
+    console.warn('[notifications] notifee not available:', e);
+  }
+}
+
 const FCM_TOKEN_KEY = 'fcmToken';
 const TIMEZONE_KEY = 'lastReportedTimezone';
+
+// Channel ID for both reminder notification types. Must stay stable — Android
+// 8+ does not let us mutate a channel's importance/sound after creation.
+const REMINDERS_CHANNEL_ID = 'reminders';
 
 /**
  * Reports the device's IANA timezone to the backend if it changed since the
@@ -67,11 +88,35 @@ export function getDeviceTimezone(): string {
 }
 
 /**
- * Requests notification permission (iOS) and returns true if granted.
- * On Android, permission is granted at install time and this returns true.
+ * Requests notification permission and returns true if granted.
+ *
+ * - iOS: handled by Firebase Messaging's requestPermission (system dialog).
+ * - Android 13+ (API 33): requires the runtime POST_NOTIFICATIONS permission
+ *   — without it, the OS silently drops every notification we try to display
+ *   even though FCM reports successful delivery. Firebase's requestPermission
+ *   does NOT request this for us on Android, so we ask explicitly here.
+ * - Android <13: notification permission is granted at install time; this
+ *   resolves true without prompting.
  */
 async function requestPermission(): Promise<boolean> {
   if (!messaging || Platform.OS === 'web') return false;
+
+  // Android 13+ runtime permission.
+  if (Platform.OS === 'android' && typeof Platform.Version === 'number' && Platform.Version >= 33) {
+    try {
+      const result = await PermissionsAndroid.request(
+        'android.permission.POST_NOTIFICATIONS' as any,
+      );
+      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+        console.warn('[notifications] POST_NOTIFICATIONS denied:', result);
+        return false;
+      }
+    } catch (e) {
+      console.warn('[notifications] POST_NOTIFICATIONS request failed:', e);
+      return false;
+    }
+  }
+
   try {
     const status = await messaging().requestPermission();
     return (
@@ -81,6 +126,23 @@ async function requestPermission(): Promise<boolean> {
   } catch (e) {
     console.warn('[notifications] requestPermission failed:', e);
     return false;
+  }
+}
+
+/**
+ * Creates the reminders notification channel on Android 8+. No-op on iOS and
+ * older Android versions. Safe to call repeatedly.
+ */
+async function ensureChannel(): Promise<void> {
+  if (!notifee || Platform.OS !== 'android') return;
+  try {
+    await notifee.createChannel({
+      id: REMINDERS_CHANNEL_ID,
+      name: 'Nhắc học',
+      importance: AndroidImportance?.HIGH ?? 4,
+    });
+  } catch (e) {
+    console.warn('[notifications] createChannel failed:', e);
   }
 }
 
@@ -103,10 +165,21 @@ async function registerToken(): Promise<string | null> {
 }
 
 /**
- * Call this once on app start, AFTER login. Idempotent.
+ * Call this once on app start AND once after a successful login. Idempotent.
+ *
+ * IMPORTANT: token registration + timezone sync both hit authed backend
+ * endpoints. If we run before the user has logged in, those requests 401 and
+ * the FCM token never lands in the DB — so the user never receives reminder
+ * pushes. We guard on the presence of an auth token here so that the call
+ * from app/_layout.tsx on a fresh install exits cleanly, and the call from
+ * the login-success path is what actually registers the device.
  */
 export async function bootstrapNotifications(): Promise<void> {
   if (!messaging) return;
+
+  // Bail out if the user isn't logged in yet — backend calls below need auth.
+  const authToken = await AsyncStorage.getItem('authToken');
+  if (!authToken) return;
 
   // 1. Permission + initial token registration.
   const enabledPref = await AsyncStorage.getItem('pushNotificationsEnabled');
@@ -114,6 +187,9 @@ export async function bootstrapNotifications(): Promise<void> {
 
   const granted = await requestPermission();
   if (!granted) return;
+
+  // Create the Android notification channel before any onMessage fires.
+  await ensureChannel();
 
   await registerToken();
 
@@ -130,11 +206,31 @@ export async function bootstrapNotifications(): Promise<void> {
     }
   });
 
-  // 4. Foreground messages. The OS does not show a system notification when
-  //    the app is in the foreground — we can surface our own UI here if we
-  //    want, but for now we only log.
+  // 4. Foreground messages. The OS does NOT auto-display the FCM notification
+  //    payload while the app is in the foreground — we render it ourselves
+  //    via notifee so the user sees a real system banner regardless of app
+  //    state. (Background/killed delivery is still handled by the OS using
+  //    the FCM notification field; we don't double-display there.)
   messaging().onMessage(async (msg: any) => {
     console.log('[notifications] foreground push:', msg?.data?.type, msg);
+    if (!notifee) return;
+    const title = msg?.notification?.title ?? '';
+    const body = msg?.notification?.body ?? '';
+    if (!title && !body) return;
+    try {
+      await notifee.displayNotification({
+        title,
+        body,
+        data: msg?.data ?? {},
+        android: {
+          channelId: REMINDERS_CHANNEL_ID,
+          pressAction: { id: 'default' },
+          smallIcon: 'ic_notification', // fallback to app icon if missing
+        },
+      });
+    } catch (e) {
+      console.warn('[notifications] foreground displayNotification failed:', e);
+    }
   });
 }
 

@@ -585,6 +585,26 @@ export const unregisterDeviceToken = (token: string) => {
   });
 };
 
+// Triggers a test push to the caller's registered devices (or to an explicit
+// token). Bypasses the scheduler's window/dedup/due-count gating — see
+// services/notification-service/internal/gapi/rpc_test_notification.go.
+export const sendTestNotification = (params?: {
+  notificationType?: 'study_reminder' | 'streak_warning';
+  token?: string;
+  dueCount?: number;
+  streak?: number;
+}) => {
+  return request('/notifications/devices:test', {
+    method: 'POST',
+    body: JSON.stringify({
+      notification_type: params?.notificationType ?? 'study_reminder',
+      token: params?.token ?? '',
+      due_count: params?.dueCount ?? 5,
+      streak: params?.streak ?? 0,
+    }),
+  });
+};
+
 // --- Import ---
 export const parseImportFile = async (
   fileSource: string | Blob,
