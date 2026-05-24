@@ -5,6 +5,7 @@ on:
       - main
     paths:
       - 'mem_pan_admin/admin-web/**'
+      - '.github/workflows/deploy-admin.yml'
 
 jobs:
   deploy:

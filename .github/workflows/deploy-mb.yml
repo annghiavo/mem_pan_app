@@ -5,6 +5,7 @@ on:
       - main
     paths:
       - 'mem_pan_mb/**'
+      - '.github/workflows/deploy-mb.yml'
 
 jobs:
   deploy:
