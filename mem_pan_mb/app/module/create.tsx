@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createDeck, bulkCreateCards, parseImportFile, createCard } from '../../services/api';
+import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, getCurrentUser } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -12,13 +12,24 @@ import { showAlert } from '../../utils/alert';
 
 interface Term {
   id: string;
+  cardId?: string;
   term: string;
   definition: string;
   image?: { uri: string; type: string; name: string };
+  imageUrl?: string;
+}
+
+interface OriginalCard {
+  contentFront: string;
+  contentBack: string;
+  imageUrl: string;
 }
 
 export default function CreateModuleScreen() {
   const router = useRouter();
+  const { id: editIdParam } = useLocalSearchParams();
+  const editId = typeof editIdParam === 'string' ? editIdParam : '';
+  const isEditMode = !!editId;
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -42,6 +53,7 @@ export default function CreateModuleScreen() {
     { id: '1', term: '', definition: '' },
     { id: '2', term: '', definition: '' },
   ]);
+  const [originalCards, setOriginalCards] = useState<Record<string, OriginalCard>>({});
 
   const [importingFileName, setImportingFileName] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState(0);
@@ -53,6 +65,72 @@ export default function CreateModuleScreen() {
       if (importIntervalRef.current) clearInterval(importIntervalRef.current);
     };
   }, []);
+
+  // In edit mode, hydrate the form from the existing deck + its cards.
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deckRes, cardsRes, meRes]: [any, any, any] = await Promise.all([
+          getDeck(editId),
+          getDeckCards(editId).catch(() => ({ cards: [] })),
+          getCurrentUser().catch(() => null),
+        ]);
+        if (cancelled) return;
+        const d = deckRes?.deck;
+        if (!d) return;
+
+        // Reject if signed-in user isn't the creator. The deck-detail screen
+        // now hides the edit entry point for non-owners, but defend this
+        // route in case someone reaches it directly (URL, deep link).
+        const me = meRes?.user || meRes?.data || meRes;
+        const myName: string = me?.username || '';
+        const creator: string = deckRes?.creatorUsername || '';
+        if (myName && creator && creator !== myName) {
+          showAlert('Không có quyền', 'Bạn không phải là chủ sở hữu của học phần này.', () => router.back());
+          return;
+        }
+        setTitle(d.name || '');
+        setDescription(d.description || '');
+        if (d.description) setShowDescription(true);
+        setWhoCanView(d.isPublic ? 'Mọi người' : 'Chỉ tôi');
+
+        const existing = (cardsRes?.cards || []) as any[];
+        if (existing.length > 0) {
+          const hydrated: Term[] = existing.map((c: any) => ({
+            id: c.cardId,
+            cardId: c.cardId,
+            term: c.contentFront || '',
+            definition: c.contentBack || '',
+            imageUrl: c.imageUrl || undefined,
+          }));
+          setTerms(hydrated);
+          const origMap: Record<string, OriginalCard> = {};
+          existing.forEach((c: any) => {
+            origMap[c.cardId] = {
+              contentFront: c.contentFront || '',
+              contentBack: c.contentBack || '',
+              imageUrl: c.imageUrl || '',
+            };
+          });
+          setOriginalCards(origMap);
+          // Pick up the deck's existing card languages so newly-added cards in
+          // edit mode default to the same pair instead of en/vi.
+          const firstWithLang = existing.find((c: any) => c.langFront || c.langBack);
+          if (firstWithLang) {
+            const fLang = Object.entries(langCodeMap).find(([, v]) => v === firstWithLang.langFront)?.[0];
+            const bLang = Object.entries(langCodeMap).find(([, v]) => v === firstWithLang.langBack)?.[0];
+            if (fLang) setTermLang(fLang);
+            if (bLang) setDefLang(bLang);
+          }
+        }
+      } catch (error: any) {
+        showAlert('Lỗi', error.message || 'Không thể tải học phần');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editId, isEditMode]);
 
   const stopProgress = () => {
     if (importIntervalRef.current) {
@@ -72,6 +150,13 @@ export default function CreateModuleScreen() {
   const [defLang, setDefLang] = useState('Tiếng Việt');
   const [whoCanView, setWhoCanView] = useState('Mọi người');
   const [whoCanEdit, setWhoCanEdit] = useState('Chỉ tôi');
+  const [langPickerTarget, setLangPickerTarget] = useState<'term' | 'def' | null>(null);
+
+  const LANGUAGE_OPTIONS = [
+    'Tiếng Việt', 'Tiếng Anh', 'Tiếng Tây Ban Nha', 'Tiếng Pháp', 'Tiếng Ý',
+    'Tiếng Đức', 'Tiếng Nga', 'Tiếng Nhật', 'Tiếng Nhật (Romaji)',
+    'Tiếng Trung (Giản thể)', 'Tiếng Trung (Phồn thể)', 'Tiếng Trung (Pinyin)', 'Tiếng Hàn',
+  ];
 
   const langCodeMap: Record<string, string> = {
     'Tiếng Việt': 'vi',
@@ -118,7 +203,11 @@ export default function CreateModuleScreen() {
   };
 
   const removeImage = (id: string) => {
-    setTerms(terms.map(t => t.id === id ? { ...t, image: undefined } : t));
+    setTerms(terms.map(t => t.id === id ? { ...t, image: undefined, imageUrl: undefined } : t));
+  };
+
+  const removeTerm = (id: string) => {
+    setTerms(prev => (prev.length > 1 ? prev.filter(t => t.id !== id) : prev));
   };
 
   const handleImport = async () => {
@@ -221,6 +310,76 @@ export default function CreateModuleScreen() {
       return;
     }
 
+    if (isEditMode) {
+      const validTerms = terms.filter(t => t.term.trim() || t.definition.trim());
+      const keptCardIds = new Set(validTerms.filter(t => t.cardId).map(t => t.cardId as string));
+      const removedCardIds = Object.keys(originalCards).filter(cid => !keptCardIds.has(cid));
+
+      setIsLoading(true);
+      try {
+        await updateDeck(editId, title.trim(), description.trim());
+        await updateDeckVisibility(editId, whoCanView === 'Mọi người');
+
+        // Delete removed cards.
+        for (const cid of removedCardIds) {
+          await deleteCard(cid);
+        }
+
+        // Update modified existing cards.
+        for (const t of validTerms) {
+          if (!t.cardId) continue;
+          const orig = originalCards[t.cardId];
+          if (!orig) continue;
+          const front = t.term.trim();
+          const back = t.definition.trim();
+          const hasNewImage = !!t.image;
+          const imageCleared = !!orig.imageUrl && !t.imageUrl && !t.image;
+          const textChanged = front !== orig.contentFront || back !== orig.contentBack;
+          if (!hasNewImage && !imageCleared && !textChanged) continue;
+
+          const payload: any = { contentFront: front, contentBack: back };
+          if (hasNewImage) payload.image = t.image;
+          else if (imageCleared) payload.imageUrl = '';
+          await updateCard(t.cardId, payload);
+        }
+
+        // Create newly added cards.
+        const newTerms = validTerms.filter(t => !t.cardId);
+        const newWithImages = newTerms.filter(t => t.image);
+        const newWithoutImages = newTerms.filter(t => !t.image);
+        if (newWithoutImages.length > 0) {
+          await bulkCreateCards(editId, newWithoutImages.map(t => ({
+            contentFront: t.term.trim(),
+            contentBack: t.definition.trim(),
+            imageUrl: '',
+            langFront: langCodeMap[termLang] || 'en',
+            langBack: langCodeMap[defLang] || 'vi',
+          })));
+        }
+        for (const t of newWithImages) {
+          await createCard(editId, {
+            contentFront: t.term.trim(),
+            contentBack: t.definition.trim(),
+            image: t.image,
+            langFront: langCodeMap[termLang] || 'en',
+            langBack: langCodeMap[defLang] || 'vi',
+          });
+        }
+
+        if (Platform.OS === 'web') {
+          showAlert('Thành công', 'Đã cập nhật học phần', () => router.back());
+        } else {
+          showAlert('Thành công', 'Đã cập nhật học phần');
+          router.back();
+        }
+      } catch (error: any) {
+        showAlert('Lỗi', error.message || 'Không thể cập nhật học phần');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     const validTerms = terms.filter(t => t.term.trim() || t.definition.trim());
     if (validTerms.length === 0) {
       showAlert('Lỗi', 'Vui lòng nhập ít nhất một thuật ngữ');
@@ -286,7 +445,7 @@ export default function CreateModuleScreen() {
             <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
               <Ionicons name="close" size={24} color={theme.iconColor} />
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Tạo học phần</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>{isEditMode ? 'Sửa học phần' : 'Tạo học phần'}</Text>
             <View style={styles.headerRight}>
               <TouchableOpacity onPress={() => setIsSettingsVisible(true)} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
                 <Ionicons name="settings-outline" size={24} color={theme.iconColor} />
@@ -325,10 +484,12 @@ export default function CreateModuleScreen() {
               />
             ) : (
               <View style={styles.infoActions}>
-                <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
-                  <Ionicons name="document-text-outline" size={20} color={theme.primary} />
-                  <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
-                </TouchableOpacity>
+                {!isEditMode && (
+                  <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
+                    <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                    <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={() => setShowDescription(true)}>
                   <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
                 </TouchableOpacity>
@@ -336,52 +497,60 @@ export default function CreateModuleScreen() {
             )}
           </View>
 
-          {/* Terms Section */}
           <View style={styles.termsSection}>
-            {terms.map((term, index) => (
-              <View key={term.id} style={[styles.termCard, { backgroundColor: theme.surface }]}>
-                <View style={styles.termCardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <TextInput
-                      style={[styles.termInput, { color: theme.text }]}
-                      placeholder="Thuật ngữ"
-                      placeholderTextColor={theme.textMuted}
-                      value={term.term}
-                      onChangeText={(val) => updateTerm(term.id, 'term', val)}
-                    />
-                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
-                    <TextInput
-                      style={[styles.termInput, { color: theme.text }]}
-                      placeholder="Định nghĩa"
-                      placeholderTextColor={theme.textMuted}
-                      value={term.definition}
-                      onChangeText={(val) => updateTerm(term.id, 'definition', val)}
-                    />
-                  </View>
-                  <View style={styles.termCardActions}>
-                    {term.image ? (
-                      <View style={styles.imagePreviewContainer}>
-                        <Image source={{ uri: term.image.uri }} style={styles.imagePreview} />
-                        <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
-                          <Ionicons name="close-circle" size={20} color="#ef4444" />
+            {terms.map((term, index) => {
+              const previewUri = term.image?.uri || term.imageUrl;
+              return (
+                <View key={term.id} style={[styles.termCard, { backgroundColor: theme.surface }]}>
+                  <View style={styles.termCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <TextInput
+                        style={[styles.termInput, { color: theme.text }]}
+                        placeholder="Thuật ngữ"
+                        placeholderTextColor={theme.textMuted}
+                        value={term.term}
+                        onChangeText={(val) => updateTerm(term.id, 'term', val)}
+                      />
+                      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                      <TextInput
+                        style={[styles.termInput, { color: theme.text }]}
+                        placeholder="Định nghĩa"
+                        placeholderTextColor={theme.textMuted}
+                        value={term.definition}
+                        onChangeText={(val) => updateTerm(term.id, 'definition', val)}
+                      />
+                    </View>
+                    <View style={styles.termCardActions}>
+                      {previewUri ? (
+                        <View style={styles.imagePreviewContainer}>
+                          <TouchableOpacity onPress={() => pickImage(term.id)}>
+                            <Image source={{ uri: previewUri }} style={styles.imagePreview} />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
+                            <Ionicons name="close-circle" size={20} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
+                          <Ionicons name="image-outline" size={24} color={theme.primary} />
                         </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
-                        <Ionicons name="image-outline" size={24} color={theme.primary} />
-                      </TouchableOpacity>
-                    )}
+                      )}
+                      {isEditMode && terms.length > 1 && (
+                        <TouchableOpacity style={styles.deleteTermBtn} onPress={() => removeTerm(term.id)}>
+                          <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
 
           <View style={{ height: 100 }} />
         </WebContainer>
         </ScrollView>
 
-        {/* Floating Add Button */}
         <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={addTerm}>
           <Ionicons name="add" size={24} color="#ffffff" />
         </TouchableOpacity>
@@ -440,79 +609,82 @@ export default function CreateModuleScreen() {
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Ngôn ngữ</Text>
-            <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <TouchableOpacity style={styles.settingRow} onPress={() => {
-                Alert.alert('Chọn ngôn ngữ', '', [
-                  { text: 'Tiếng Việt', onPress: () => setTermLang('Tiếng Việt') },
-                  { text: 'Tiếng Anh', onPress: () => setTermLang('Tiếng Anh') },
-                  { text: 'Tiếng Tây Ban Nha', onPress: () => setTermLang('Tiếng Tây Ban Nha') },
-                  { text: 'Tiếng Pháp', onPress: () => setTermLang('Tiếng Pháp') },
-                  { text: 'Tiếng Ý', onPress: () => setTermLang('Tiếng Ý') },
-                  { text: 'Tiếng Đức', onPress: () => setTermLang('Tiếng Đức') },
-                  { text: 'Tiếng Nga', onPress: () => setTermLang('Tiếng Nga') },
-                  { text: 'Tiếng Nhật', onPress: () => setTermLang('Tiếng Nhật') },
-                  { text: 'Tiếng Nhật (Romaji)', onPress: () => setTermLang('Tiếng Nhật (Romaji)') },
-                  { text: 'Tiếng Trung (Giản thể)', onPress: () => setTermLang('Tiếng Trung (Giản thể)') },
-                  { text: 'Tiếng Trung (Phồn thể)', onPress: () => setTermLang('Tiếng Trung (Phồn thể)') },
-                  { text: 'Tiếng Trung (Pinyin)', onPress: () => setTermLang('Tiếng Trung (Pinyin)') },
-                  { text: 'Tiếng Hàn', onPress: () => setTermLang('Tiếng Hàn') },
-                  { text: 'Hủy', style: 'cancel' }
-                ]);
-              }}>
-                <Text style={[styles.settingLabel, { color: theme.text }]}>Thuật ngữ</Text>
-                <Text style={[styles.settingValue, { color: theme.primary }]}>{termLang}</Text>
-              </TouchableOpacity>
-              <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
-              <TouchableOpacity style={styles.settingRow} onPress={() => {
-                Alert.alert('Chọn ngôn ngữ', '', [
-                  { text: 'Tiếng Việt', onPress: () => setDefLang('Tiếng Việt') },
-                  { text: 'Tiếng Anh', onPress: () => setDefLang('Tiếng Anh') },
-                  { text: 'Tiếng Tây Ban Nha', onPress: () => setDefLang('Tiếng Tây Ban Nha') },
-                  { text: 'Tiếng Pháp', onPress: () => setDefLang('Tiếng Pháp') },
-                  { text: 'Tiếng Ý', onPress: () => setDefLang('Tiếng Ý') },
-                  { text: 'Tiếng Đức', onPress: () => setDefLang('Tiếng Đức') },
-                  { text: 'Tiếng Nga', onPress: () => setDefLang('Tiếng Nga') },
-                  { text: 'Tiếng Nhật', onPress: () => setDefLang('Tiếng Nhật') },
-                  { text: 'Tiếng Nhật (Romaji)', onPress: () => setDefLang('Tiếng Nhật (Romaji)') },
-                  { text: 'Tiếng Trung (Giản thể)', onPress: () => setDefLang('Tiếng Trung (Giản thể)') },
-                  { text: 'Tiếng Trung (Phồn thể)', onPress: () => setDefLang('Tiếng Trung (Phồn thể)') },
-                  { text: 'Tiếng Trung (Pinyin)', onPress: () => setDefLang('Tiếng Trung (Pinyin)') },
-                  { text: 'Tiếng Hàn', onPress: () => setDefLang('Tiếng Hàn') },
-                  { text: 'Hủy', style: 'cancel' }
-                ]);
-              }}>
-                <Text style={[styles.settingLabel, { color: theme.text }]}>Định nghĩa</Text>
-                <Text style={[styles.settingValue, { color: theme.primary }]}>{defLang}</Text>
-              </TouchableOpacity>
-            </View>
+            {!isEditMode && (
+              <>
+                <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Ngôn ngữ</Text>
+                <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <TouchableOpacity style={styles.settingRow} onPress={() => setLangPickerTarget('term')}>
+                    <Text style={[styles.settingLabel, { color: theme.text }]}>Thuật ngữ</Text>
+                    <Text style={[styles.settingValue, { color: theme.primary }]}>{termLang}</Text>
+                  </TouchableOpacity>
+                  <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
+                  <TouchableOpacity style={styles.settingRow} onPress={() => setLangPickerTarget('def')}>
+                    <Text style={[styles.settingLabel, { color: theme.text }]}>Định nghĩa</Text>
+                    <Text style={[styles.settingValue, { color: theme.primary }]}>{defLang}</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
 
-            <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: 24 }]}>Quyền riêng tư</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: isEditMode ? 0 : 24 }]}>Quyền riêng tư</Text>
             <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <TouchableOpacity style={styles.settingRow} onPress={() => {
-                Alert.alert('Ai có thể xem', '', [
-                  { text: 'Mọi người', onPress: () => setWhoCanView('Mọi người') },
-                  { text: 'Chỉ tôi', onPress: () => setWhoCanView('Chỉ tôi') },
-                  { text: 'Hủy', style: 'cancel' }
-                ]);
-              }}>
-                <Text style={[styles.settingLabel, { color: theme.text }]}>Ai có thể xem</Text>
-                <Text style={[styles.settingValue, { color: theme.primary }]}>{whoCanView}</Text>
+              <TouchableOpacity style={styles.settingRow} onPress={() => setWhoCanView('Mọi người')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="globe-outline" size={20} color={theme.textMuted} style={{ marginRight: 12 }} />
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>Mọi người</Text>
+                </View>
+                {whoCanView === 'Mọi người' && <Ionicons name="checkmark" size={22} color={theme.primary} />}
               </TouchableOpacity>
               <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
-              <TouchableOpacity style={styles.settingRow} onPress={() => {
-                Alert.alert('Ai có thể sửa', '', [
-                  { text: 'Mọi người', onPress: () => setWhoCanEdit('Mọi người') },
-                  { text: 'Chỉ tôi', onPress: () => setWhoCanEdit('Chỉ tôi') },
-                  { text: 'Hủy', style: 'cancel' }
-                ]);
-              }}>
-                <Text style={[styles.settingLabel, { color: theme.text }]}>Ai có thể sửa</Text>
-                <Text style={[styles.settingValue, { color: theme.primary }]}>{whoCanEdit}</Text>
+              <TouchableOpacity style={styles.settingRow} onPress={() => setWhoCanView('Chỉ tôi')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="lock-closed-outline" size={20} color={theme.textMuted} style={{ marginRight: 12 }} />
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>Chỉ tôi</Text>
+                </View>
+                {whoCanView === 'Chỉ tôi' && <Ionicons name="checkmark" size={22} color={theme.primary} />}
               </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Language picker — list of options shown inline. Avoids Alert.alert,
+          which on web only supports OK/Cancel and silently drops multi-option
+          onPress callbacks. */}
+      <Modal
+        visible={langPickerTarget !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setLangPickerTarget(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.langPickerOverlay}
+          onPress={() => setLangPickerTarget(null)}
+        >
+          <View style={[styles.langPickerSheet, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.langPickerTitle, { color: theme.text }]}>Chọn ngôn ngữ</Text>
+            <ScrollView>
+              {LANGUAGE_OPTIONS.map(lang => {
+                const selected = langPickerTarget === 'term' ? termLang === lang : defLang === lang;
+                return (
+                  <TouchableOpacity
+                    key={lang}
+                    style={[styles.langPickerRow, { borderBottomColor: theme.border }]}
+                    onPress={() => {
+                      if (langPickerTarget === 'term') setTermLang(lang);
+                      else if (langPickerTarget === 'def') setDefLang(lang);
+                      setLangPickerTarget(null);
+                    }}
+                  >
+                    <Text style={[styles.settingLabel, { color: theme.text }]}>{lang}</Text>
+                    {selected && <Ionicons name="checkmark" size={22} color={theme.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -538,6 +710,7 @@ const styles = StyleSheet.create({
   termCardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
   termCardActions: { marginLeft: 12, alignItems: 'center', justifyContent: 'center' },
   addImageBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(66, 85, 255, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  deleteTermBtn: { marginTop: 8, width: 44, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   imagePreviewContainer: { position: 'relative' },
   imagePreview: { width: 60, height: 60, borderRadius: 8 },
   removeImageBtn: { position: 'absolute', top: -10, right: -10, backgroundColor: '#fff', borderRadius: 10 },
@@ -561,4 +734,8 @@ const styles = StyleSheet.create({
   settingLabel: { fontSize: 16 },
   settingValue: { fontSize: 16, fontWeight: '500' },
   modalDivider: { height: 1, marginLeft: 16 },
+  langPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  langPickerSheet: { width: '100%', maxWidth: 420, maxHeight: '80%', borderRadius: 16, padding: 16 },
+  langPickerTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12, textAlign: 'center' },
+  langPickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8, borderBottomWidth: 1 },
 });

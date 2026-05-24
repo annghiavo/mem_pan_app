@@ -5,9 +5,25 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getDeck, getDeckStudySettings, updateDeckStudySettings } from '../../services/api';
+import { getDeck, getDeckCards, getDeckStudySettings, updateDeckStudySettings } from '../../services/api';
 import { StudySettings, defaultStudySettings } from '../../types/studySettings';
 import { WebContainer } from '../../components/ui/WebContainer';
+
+const langNameMap: Record<string, string> = {
+  vi: 'Tiếng Việt',
+  en: 'Tiếng Anh',
+  es: 'Tiếng Tây Ban Nha',
+  fr: 'Tiếng Pháp',
+  it: 'Tiếng Ý',
+  de: 'Tiếng Đức',
+  ru: 'Tiếng Nga',
+  ja: 'Tiếng Nhật',
+  ja_romaji: 'Tiếng Nhật (Romaji)',
+  zh_hans: 'Tiếng Trung (Giản thể)',
+  zh_hant: 'Tiếng Trung (Phồn thể)',
+  zh_pinyin: 'Tiếng Trung (Pinyin)',
+  ko: 'Tiếng Hàn',
+};
 
 const STRICTNESS_LABELS: Record<string, string> = {
   flexible: 'Nới lỏng',
@@ -43,15 +59,27 @@ export default function QuizSettingsScreen() {
   const [deckName, setDeckName] = useState('');
   const [settings, setSettings] = useState<StudySettings>(defaultStudySettings);
   const [showStrictnessPicker, setShowStrictnessPicker] = useState(false);
+  const [langFrontLabel, setLangFrontLabel] = useState('Thuật ngữ');
+  const [langBackLabel, setLangBackLabel] = useState('Định nghĩa');
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [deckRes, settingsRes] = await Promise.all([
+        const [deckRes, cardsRes, settingsRes] = await Promise.all([
           getDeck(deckId),
+          getDeckCards(deckId).catch(() => ({ cards: [] })),
           getDeckStudySettings(deckId).catch(() => null),
         ]);
         setDeckName(deckRes?.deck?.name ?? '');
+
+        const cardsList = cardsRes?.cards || [];
+        if (cardsList.length > 0) {
+          const firstCard = cardsList[0];
+          const fl = firstCard.langFront ? (langNameMap[firstCard.langFront] || firstCard.langFront) : 'Thuật ngữ';
+          const bl = firstCard.langBack ? (langNameMap[firstCard.langBack] || firstCard.langBack) : 'Định nghĩa';
+          setLangFrontLabel(fl);
+          setLangBackLabel(bl);
+        }
         if (settingsRes?.settings) {
           const s = settingsRes.settings;
           setSettings({
@@ -177,7 +205,7 @@ export default function QuizSettingsScreen() {
         <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>TRẢ LỜI BẰNG</Text>
         <View style={[styles.section, { borderColor: theme.border }]}>
           <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
-            <Text style={[styles.label, { color: theme.text }]}>Thuật ngữ</Text>
+            <Text style={[styles.label, { color: theme.text }]}>{langFrontLabel}</Text>
             <Switch
               value={settings.answerWithTerm}
               onValueChange={v => handleToggleAnswerWith('answerWithTerm', v)}
@@ -186,7 +214,7 @@ export default function QuizSettingsScreen() {
             />
           </View>
           <View style={styles.row}>
-            <Text style={[styles.label, { color: theme.text }]}>Định nghĩa</Text>
+            <Text style={[styles.label, { color: theme.text }]}>{langBackLabel}</Text>
             <Switch
               value={settings.answerWithDefinition}
               onValueChange={v => handleToggleAnswerWith('answerWithDefinition', v)}

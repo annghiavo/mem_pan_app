@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import { devlog } from '../../services/devlog';
+import { ReportSheet } from '../../components/ui/ReportSheet';
 
 function buildDeckShareUrl(deckId: string): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -76,9 +77,19 @@ export default function ModuleDetailWebScreen() {
   const [dueCount, setDueCount] = useState<number>(0);
   const [creatorUsername, setCreatorUsername] = useState<string>('');
   const [creatorAvatar, setCreatorAvatar] = useState<string>('');
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
+  // Whether the signed-in user owns this deck. See app/module/[id].tsx for
+  // the matching rule.
+  const isOwner = (() => {
+    if (!currentUsername) return false;
+    if (!creatorUsername) return true;
+    return creatorUsername === currentUsername;
+  })();
+
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFolderSelectModal, setShowFolderSelectModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -91,16 +102,18 @@ export default function ModuleDetailWebScreen() {
   const [cardBack, setCardBack] = useState('');
   const [cardImage, setCardImage] = useState<any>(null);
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     devlog.event('module:mount', { deckId: id });
     const fetchDeckData = async () => {
       try {
-        const [deckRes, cardsRes, progressRes, dueRes] = await Promise.all([
+        const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
           getDeck(id as string),
           getDeckCards(id as string),
           getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
-          getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; })
+          getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; }),
+          getCurrentUser().catch(() => null),
         ]);
         setDeckData(deckRes.deck);
         setCreatorUsername(deckRes.creatorUsername || '');
@@ -108,6 +121,8 @@ export default function ModuleDetailWebScreen() {
         setCards(cardsRes.cards || []);
         setProgress(progressRes);
         setDueCount(dueRes?.total || 0);
+        const me = meRes?.user || meRes?.data || meRes;
+        if (me?.username) setCurrentUsername(me.username);
         devlog.info('module: deck loaded', { deckId: id, cardCount: cardsRes.cards?.length ?? 0, dueCount: dueRes?.total ?? 0 });
       } catch (error) {
         devlog.error('module: failed to load deck', error, { deckId: id });
@@ -209,6 +224,23 @@ export default function ModuleDetailWebScreen() {
     setShowCardEditModal(true);
   };
 
+  const handlePickCardImage = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const uri = URL.createObjectURL(file);
+    setCardImage({
+      uri,
+      type: file.type || 'image/jpeg',
+      name: file.name || `card_${Date.now()}.jpg`,
+    });
+    // Reset the input so the same file can be re-selected
+    e.target.value = '';
+  };
+
   const handleUpdateCard = async () => {
     devlog.event('card:edit:submit', { cardId: editingCard?.cardId });
     if (!cardFront.trim() || !cardBack.trim()) {
@@ -220,6 +252,7 @@ export default function ModuleDetailWebScreen() {
       const res = await updateCard(editingCard.cardId, {
         contentFront: cardFront,
         contentBack: cardBack,
+        image: cardImage || undefined,
       });
       const updatedCards = cards.map(c => c.cardId === editingCard.cardId ? { ...c, ...res.card } : c);
       setCards(updatedCards);
@@ -370,15 +403,22 @@ export default function ModuleDetailWebScreen() {
                     {item.langBack ? <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langBack] || item.langBack}</Text> : null}
                     <Text style={[styles.termText, { color: theme.textMuted }]}>{item.contentBack}</Text>
                   </View>
+                  {item.imageUrl ? (
+                    <View style={styles.termImageSide}>
+                      <Image source={{ uri: item.imageUrl }} style={styles.termImage} resizeMode="cover" />
+                    </View>
+                  ) : null}
                 </View>
-                <View style={styles.termActionsWeb}>
-                  <TouchableOpacity style={styles.actionIconCell} onPress={() => handleOpenCardEdit(item)}>
-                    <Ionicons name="pencil-outline" size={20} color={theme.textMuted} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionIconCell} onPress={() => handleDeleteCard(item.cardId)}>
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
+                {isOwner && (
+                  <View style={styles.termActionsWeb}>
+                    <TouchableOpacity style={styles.actionIconCell} onPress={() => handleOpenCardEdit(item)}>
+                      <Ionicons name="pencil-outline" size={20} color={theme.textMuted} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionIconCell} onPress={() => handleDeleteCard(item.cardId)}>
+                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -396,15 +436,15 @@ export default function ModuleDetailWebScreen() {
               <Ionicons name="folder-outline" size={22} color={theme.textMuted} />
               <Text style={[styles.optionRowText, { color: theme.text }]}>Thêm vào thư mục</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => {
-              setEditName(deckData.name);
-              setEditDesc(deckData.description || '');
-              setShowOptionsModal(false);
-              setShowEditModal(true);
-            }}>
-              <Ionicons name="pencil-outline" size={22} color={theme.textMuted} />
-              <Text style={[styles.optionRowText, { color: theme.text }]}>Sửa</Text>
-            </HoverableCard>
+            {isOwner && (
+              <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => {
+                setShowOptionsModal(false);
+                router.push(`/module/create?id=${id}` as any);
+              }}>
+                <Ionicons name="pencil-outline" size={22} color={theme.textMuted} />
+                <Text style={[styles.optionRowText, { color: theme.text }]}>Sửa</Text>
+              </HoverableCard>
+            )}
             <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleCloneDeck}>
               <Ionicons name="copy-outline" size={22} color={theme.textMuted} />
               <Text style={[styles.optionRowText, { color: theme.text }]}>Sao chép học phần</Text>
@@ -413,10 +453,19 @@ export default function ModuleDetailWebScreen() {
               <Ionicons name="share-social-outline" size={22} color={theme.textMuted} />
               <Text style={[styles.optionRowText, { color: theme.text }]}>Chia sẻ</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleDeleteDeck}>
-              <Ionicons name="trash-outline" size={22} color="#ef4444" />
-              <Text style={[styles.optionRowText, { color: '#ef4444' }]}>Xóa</Text>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => {
+              setShowOptionsModal(false);
+              setShowReportSheet(true);
+            }}>
+              <Ionicons name="flag-outline" size={22} color="#ef4444" />
+              <Text style={[styles.optionRowText, { color: '#ef4444' }]}>Báo cáo học phần này</Text>
             </HoverableCard>
+            {isOwner && (
+              <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleDeleteDeck}>
+                <Ionicons name="trash-outline" size={22} color="#ef4444" />
+                <Text style={[styles.optionRowText, { color: '#ef4444' }]}>Xóa</Text>
+              </HoverableCard>
+            )}
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setShowOptionsModal(false)} style={styles.btnSecondary}>
                 <Text style={{ color: theme.text }}>Đóng</Text>
@@ -460,6 +509,17 @@ export default function ModuleDetailWebScreen() {
         </View>
       </Modal>
 
+      {/* Hidden file input for web image picker */}
+      {typeof document !== 'undefined' && (
+        <input
+          ref={fileInputRef as any}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange as any}
+        />
+      )}
+
       {/* Edit Card Modal (web) */}
       <Modal visible={showCardEditModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
@@ -483,6 +543,32 @@ export default function ModuleDetailWebScreen() {
               placeholderTextColor={theme.textMuted}
               multiline
             />
+
+            {/* Image section */}
+            <Text style={[{ color: theme.text, marginBottom: 6, marginTop: 12, fontWeight: '600' as any }]}>Hình ảnh</Text>
+            <View style={styles.cardEditImageContainer}>
+              {cardImage ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: cardImage.uri }} style={styles.cardEditImage} resizeMode="contain" />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => setCardImage(null)}>
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ) : editingCard?.imageUrl ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: editingCard.imageUrl }} style={styles.cardEditImage} resizeMode="contain" />
+                  <TouchableOpacity style={styles.changeImageBtn} onPress={handlePickCardImage}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Thay đổi</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={[styles.addImageBtn, { borderColor: theme.border }]} onPress={handlePickCardImage}>
+                  <Ionicons name="image-outline" size={32} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, marginTop: 8 }}>Thêm hình ảnh</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setShowCardEditModal(false)} style={styles.btnSecondary} disabled={isUpdatingCard}>
                 <Text style={{ color: theme.text }}>Hủy</Text>
@@ -499,6 +585,12 @@ export default function ModuleDetailWebScreen() {
         </View>
       </Modal>
 
+      <ReportSheet
+        visible={showReportSheet}
+        onClose={() => setShowReportSheet(false)}
+        targetType="deck"
+        targetId={id as string}
+      />
     </View>
   );
 }
@@ -546,6 +638,8 @@ const styles = StyleSheet.create({
   termCardWeb: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
   termCardContent: { flex: 1, flexDirection: 'row' },
   termSide: { flex: 1, padding: 20 },
+  termImageSide: { padding: 20, justifyContent: 'center', alignItems: 'center' },
+  termImage: { width: 96, height: 96, borderRadius: 8 },
   termDivider: { width: 1 },
   termLangLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   termText: { fontSize: 18, lineHeight: 26 },
@@ -566,4 +660,11 @@ const styles = StyleSheet.create({
   optionsModalContent: { width: 360, padding: 20, borderRadius: 16, borderWidth: 1, gap: 8 },
   optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, gap: 12 },
   optionRowText: { fontSize: 16, fontWeight: '500' },
+
+  cardEditImageContainer: { marginTop: 4, alignItems: 'center' },
+  cardEditImage: { width: '100%', height: 200, borderRadius: 12 },
+  imagePreviewContainer: { width: '100%', position: 'relative' },
+  removeImageBtn: { position: 'absolute', top: 8, right: 8, backgroundColor: '#fff', borderRadius: 15 },
+  changeImageBtn: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  addImageBtn: { width: '100%', height: 120, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed' as any, justifyContent: 'center', alignItems: 'center', cursor: 'pointer' as any },
 });

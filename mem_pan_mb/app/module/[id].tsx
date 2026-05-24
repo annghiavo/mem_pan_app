@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 
@@ -55,7 +55,18 @@ export default function ModuleDetailScreen() {
   const [dueCount, setDueCount] = useState<number>(0);
   const [creatorUsername, setCreatorUsername] = useState<string>('');
   const [creatorAvatar, setCreatorAvatar] = useState<string>('');
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const [loading, setLoading] = useState(true);
+
+  // Whether the signed-in user owns this deck. When the API returns no
+  // creatorUsername (current convention for own decks — see (tabs)/index.tsx),
+  // treat that as owned. Otherwise compare usernames. Defaults to false until
+  // we know who the user is, so destructive UI doesn't flash for non-owners.
+  const isOwner = (() => {
+    if (!currentUsername) return false;
+    if (!creatorUsername) return true;
+    return creatorUsername === currentUsername;
+  })();
 
   // Modal States
   const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -65,6 +76,9 @@ export default function ModuleDetailScreen() {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [folders, setFolders] = useState<any[]>([]);
+
+  // Visibility Picker
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
 
   // Card Edit States
   const [showCardEditModal, setShowCardEditModal] = useState(false);
@@ -77,11 +91,12 @@ export default function ModuleDetailScreen() {
   useEffect(() => {
     const fetchDeckData = async () => {
       try {
-        const [deckRes, cardsRes, progressRes, dueRes] = await Promise.all([
+        const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
           getDeck(id as string),
           getDeckCards(id as string),
           getDeckProgress(id as string).catch(() => null),
-          getDueCards(id as string).catch(() => ({ total: 0 }))
+          getDueCards(id as string).catch(() => ({ total: 0 })),
+          getCurrentUser().catch(() => null),
         ]);
         setDeckData(deckRes.deck);
         setCreatorUsername(deckRes.creatorUsername || '');
@@ -89,6 +104,8 @@ export default function ModuleDetailScreen() {
         setCards(cardsRes.cards || []);
         setProgress(progressRes);
         setDueCount(dueRes?.total || 0);
+        const me = meRes?.user || meRes?.data || meRes;
+        if (me?.username) setCurrentUsername(me.username);
       } catch (error) {
         console.error('Error fetching deck:', error);
       } finally {
@@ -190,6 +207,23 @@ export default function ModuleDetailScreen() {
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể sao chép học phần');
     }
+  };
+
+  const applyVisibility = async (isPublic: boolean) => {
+    setShowVisibilityModal(false);
+    if (deckData?.isPublic === isPublic) return;
+    try {
+      const res = await updateDeckVisibility(id as string, isPublic);
+      setDeckData({ ...deckData, ...(res?.deck || { isPublic }) });
+      Alert.alert('Thành công', isPublic ? 'Học phần đã được đặt công khai' : 'Học phần đã được đặt riêng tư');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật quyền riêng tư');
+    }
+  };
+
+  const handleChangeVisibility = () => {
+    setShowOptionsModal(false);
+    setShowVisibilityModal(true);
   };
 
   const handleOpenCardEdit = (card: any) => {
@@ -387,14 +421,16 @@ export default function ModuleDetailScreen() {
               {item.imageUrl ? (
                 <Image source={{ uri: item.imageUrl }} style={styles.termImage} />
               ) : null}
-              <View style={styles.termActions}>
-                <TouchableOpacity style={{ marginRight: 16 }} onPress={() => handleOpenCardEdit(item)}>
-                  <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteCard(item.cardId)}>
-                  <Ionicons name="trash-outline" size={24} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
+              {isOwner && (
+                <View style={styles.termActions}>
+                  <TouchableOpacity style={{ marginRight: 16 }} onPress={() => handleOpenCardEdit(item)}>
+                    <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDeleteCard(item.cardId)}>
+                    <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
             {item.langBack ? (
               <Text style={[styles.termLangLabel, { color: theme.primary, marginTop: 8 }]}>{langNameMap[item.langBack] || item.langBack}</Text>
@@ -415,15 +451,22 @@ export default function ModuleDetailScreen() {
               <Ionicons name="folder-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Thêm vào thư mục</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => {
-              setEditName(deckData.name);
-              setEditDesc(deckData.description || '');
-              setShowOptionsModal(false);
-              setShowEditModal(true);
-            }}>
-              <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
-              <Text style={[styles.optionText, { color: theme.text }]}>Sửa</Text>
-            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => {
+                setShowOptionsModal(false);
+                router.push(`/module/create?id=${id}` as any);
+              }}>
+                <Ionicons name="pencil-outline" size={24} color={theme.textMuted} />
+                <Text style={[styles.optionText, { color: theme.text }]}>Sửa</Text>
+              </TouchableOpacity>
+            )}
+            {isOwner && (
+              <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleChangeVisibility}>
+                <Ionicons name={deckData.isPublic ? 'globe-outline' : 'lock-closed-outline'} size={24} color={theme.textMuted} />
+                <Text style={[styles.optionText, { color: theme.text }]}>Quyền riêng tư</Text>
+                <Text style={[styles.optionValue, { color: theme.primary }]}>{deckData.isPublic ? 'Mọi người' : 'Chỉ tôi'}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleCloneDeck}>
               <Ionicons name="copy-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Sao chép học phần</Text>
@@ -439,9 +482,31 @@ export default function ModuleDetailScreen() {
               <Ionicons name="flag-outline" size={24} color="#ef4444" />
               <Text style={[styles.optionText, { color: '#ef4444' }]}>Báo cáo học phần này</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleDeleteDeck}>
-              <Ionicons name="trash-outline" size={24} color="#ef4444" />
-              <Text style={[styles.optionText, { color: '#ef4444' }]}>Xóa</Text>
+            {isOwner && (
+              <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleDeleteDeck}>
+                <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                <Text style={[styles.optionText, { color: '#ef4444' }]}>Xóa</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Visibility Picker Modal */}
+      <Modal visible={showVisibilityModal} transparent={true} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowVisibilityModal(false)}>
+          <View style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+            <View style={[styles.bottomSheetHandle, { backgroundColor: theme.border }]} />
+            <Text style={[styles.visibilityTitle, { color: theme.textMuted }]}>Ai có thể xem</Text>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => applyVisibility(true)}>
+              <Ionicons name="globe-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Mọi người</Text>
+              {deckData.isPublic ? <Ionicons name="checkmark" size={22} color={theme.primary} /> : null}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => applyVisibility(false)}>
+              <Ionicons name="lock-closed-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Chỉ tôi</Text>
+              {!deckData.isPublic ? <Ionicons name="checkmark" size={22} color={theme.primary} /> : null}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -620,7 +685,9 @@ const styles = StyleSheet.create({
   bottomSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
   bottomSheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   optionItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1 },
-  optionText: { fontSize: 18, marginLeft: 16 },
+  optionText: { fontSize: 18, marginLeft: 16, flex: 1 },
+  optionValue: { fontSize: 15, fontWeight: '500' },
+  visibilityTitle: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4, marginLeft: 4 },
   fullScreenModal: { flex: 1, paddingTop: 50 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1 },
   cancelText: { fontSize: 16 },

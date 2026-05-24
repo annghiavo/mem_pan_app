@@ -1,7 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/v1'; let authToken = '';
+// React Native's FormData accepts `{ uri, type, name }` and builds a real
+// multipart file part. The browser's FormData does NOT — it coerces the object
+// to `[object Object]`, dropping the file. On web we must resolve the URI to a
+// Blob/File first; on native, keep the RN object shape.
+async function appendImageFile(
+  formData: FormData,
+  field: string,
+  image: { uri: string; type: string; name: string },
+): Promise<void> {
+  if (Platform.OS === 'web') {
+    const blob = await fetch(image.uri).then(r => r.blob());
+    const filename = image.name || `image_${Date.now()}.${(image.type || 'image/jpeg').split('/')[1] || 'jpg'}`;
+    const fileLike = typeof File !== 'undefined'
+      ? new File([blob], filename, { type: image.type || blob.type || 'image/jpeg' })
+      : blob;
+    formData.append(field, fileLike as any, filename);
+    return;
+  }
+  formData.append(field, {
+    uri: image.uri,
+    type: image.type,
+    name: image.name,
+  } as any);
+}
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/v1'; let authToken = '';
 let currentRefreshToken = '';
 
 // --- API call logging (dev only) ---
@@ -221,11 +247,7 @@ export const uploadAvatar = async (uri: string, mimeType: string, fileName: stri
   }
 
   const formData = new FormData();
-  formData.append('avatar', {
-    uri,
-    type: mimeType,
-    name: fileName,
-  } as any);
+  await appendImageFile(formData, 'avatar', { uri, type: mimeType, name: fileName });
 
   const url = `${API_URL}/users/me/avatar`;
   logRequest('POST', url, formData);
@@ -281,8 +303,16 @@ export const deleteDeck = (deckId: string) => {
   return request(`/decks/${deckId}`, { method: 'DELETE' });
 };
 
-export const getPublicDecks = (page = 1, pageSize = 20) => {
-  return request(`/decks/public?page=${page}&pageSize=${pageSize}`);
+export const getPublicDecks = (page = 1, pageSize = 20, userId?: string) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (userId) params.set('userId', userId);
+  return request(`/decks/public?${params.toString()}`);
+};
+
+export const getPublicFolders = (page = 1, pageSize = 20, userId?: string) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (userId) params.set('userId', userId);
+  return request(`/folders/public?${params.toString()}`);
 };
 
 export const getDeckStats = (deckId: string) => {
@@ -319,11 +349,7 @@ export const createCard = async (deckId: string, data: {
   formData.append('content_front', data.contentFront);
   formData.append('content_back', data.contentBack);
   if (data.image) {
-    formData.append('image', {
-      uri: data.image.uri,
-      type: data.image.type,
-      name: data.image.name,
-    } as any);
+    await appendImageFile(formData, 'image', data.image);
   }
   if (data.imageUrl) {
     formData.append('image_url', data.imageUrl);
@@ -409,11 +435,7 @@ export const updateCard = async (cardId: string, data: {
   const formData = new FormData();
   if (data.contentFront) formData.append('content_front', data.contentFront);
   if (data.contentBack) formData.append('content_back', data.contentBack);
-  formData.append('image', {
-    uri: data.image.uri,
-    type: data.image.type,
-    name: data.image.name,
-  } as any);
+  await appendImageFile(formData, 'image', data.image);
   if (data.imageUrl) formData.append('image_url', data.imageUrl);
   if (data.langFront) formData.append('lang_front', data.langFront);
   if (data.langBack) formData.append('lang_back', data.langBack);

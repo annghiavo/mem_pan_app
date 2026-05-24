@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listDecks, updateDeckStatus, type Deck, type DeckStatus } from "../api/decks";
-import { ArrowLeft, AlertCircle, CheckCircle2, Layers } from "lucide-react";
+import { ArrowLeft, AlertCircle, CheckCircle2, Layers, ExternalLink } from "lucide-react";
 
 interface LocationState {
   deck?: Deck;
@@ -148,6 +148,28 @@ export default function DeckDetailPage() {
         >
           <dt style={{ color: "var(--text-muted)" }}>Deck ID</dt>
           <dd style={{ fontFamily: "monospace" }}>{id}</dd>
+
+          {import.meta.env.VITE_MAIN_APP_URL && (
+            <>
+              <dt style={{ color: "var(--text-muted)" }}>Main App</dt>
+              <dd>
+                <a
+                  href={`${import.meta.env.VITE_MAIN_APP_URL}/module/${id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    color: "var(--accent-primary)",
+                    textDecoration: "none",
+                  }}
+                >
+                  View Deck <ExternalLink size={14} />
+                </a>
+              </dd>
+            </>
+          )}
 
           {deck && (
             <>

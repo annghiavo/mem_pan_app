@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Modal, Image, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { useThemeColor } from '../../hooks/use-theme-color';
 import { ReportSheet } from '../../components/ui/ReportSheet';
-import { getUserPublicProfile } from '../../services/api';
+import { getUserPublicProfile, getPublicDecks, getPublicFolders } from '../../services/api';
+
+type Deck = { deckId: string; name: string; description?: string; cardCount?: number };
+type Folder = { folderId: string; name: string; description?: string };
 
 export default function UserProfileScreen() {
     const router = useRouter();
@@ -13,16 +16,34 @@ export default function UserProfileScreen() {
 
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [decks, setDecks] = useState<Deck[]>([]);
+    const [folders, setFolders] = useState<Folder[]>([]);
+    const [activeTab, setActiveTab] = useState<'decks' | 'folders'>('decks');
 
-    useEffect(() => {
-        if (!id) return;
-        getUserPublicProfile(id as string)
-            .then((res: any) => {
-                setUser(res.user || res);
-            })
-            .catch(() => setUser(null))
-            .finally(() => setLoading(false));
-    }, [id]);
+    // Refetch on every focus so visibility changes made elsewhere (e.g. user
+    // just made one of their decks public from the deck-detail screen) show
+    // up immediately when navigating back to the profile.
+    useFocusEffect(
+        useCallback(() => {
+            if (!id) return;
+            const userId = id as string;
+            let cancelled = false;
+            setLoading(true);
+            Promise.all([
+                getUserPublicProfile(userId).then((res: any) => res.user || res).catch(() => null),
+                getPublicDecks(1, 50, userId).then((res: any) => res.decks || []).catch(() => []),
+                getPublicFolders(1, 50, userId).then((res: any) => res.folders || []).catch(() => []),
+            ])
+                .then(([u, d, f]) => {
+                    if (cancelled) return;
+                    setUser(u);
+                    setDecks(d);
+                    setFolders(f);
+                })
+                .finally(() => { if (!cancelled) setLoading(false); });
+            return () => { cancelled = true; };
+        }, [id])
+    );
 
     const [showOptionsModal, setShowOptionsModal] = useState(false);
     const [showReportSheet, setShowReportSheet] = useState(false);
@@ -97,7 +118,66 @@ export default function UserProfileScreen() {
                                 Tham gia: {new Date(user.createdAt).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
                             </Text>
                         ) : null}
-                        <Text style={[styles.emptyText, { color: muteColor }]}>Không có dữ liệu</Text>
+
+                        <View style={styles.tabsContainer}>
+                            <TouchableOpacity
+                                style={[styles.tab, activeTab === 'decks' && styles.activeTab]}
+                                onPress={() => setActiveTab('decks')}
+                            >
+                                <Text style={[styles.tabText, { color: activeTab === 'decks' ? primaryColor : muteColor }]}>
+                                    Học phần ({decks.length})
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.tab, activeTab === 'folders' && styles.activeTab]}
+                                onPress={() => setActiveTab('folders')}
+                            >
+                                <Text style={[styles.tabText, { color: activeTab === 'folders' ? primaryColor : muteColor }]}>
+                                    Thư mục ({folders.length})
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {activeTab === 'decks' ? (
+                            decks.length === 0 ? (
+                                <Text style={[styles.emptyText, { color: muteColor }]}>Không có học phần công khai</Text>
+                            ) : (
+                                <View style={styles.cardsList}>
+                                    {decks.map(d => (
+                                        <TouchableOpacity
+                                            key={d.deckId}
+                                            style={[styles.deckCard, { backgroundColor: '#fff', borderColor: '#e5e7eb' }]}
+                                            onPress={() => router.push(`/module/${d.deckId}` as any)}
+                                        >
+                                            <Text style={[styles.deckTitle, { color: textColor }]} numberOfLines={1}>{d.name}</Text>
+                                            {d.description ? (
+                                                <Text style={[styles.deckDescription, { color: muteColor }]} numberOfLines={2}>{d.description}</Text>
+                                            ) : null}
+                                            <Text style={styles.deckTermsCount}>{d.cardCount ?? 0} thẻ</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )
+                        ) : (
+                            folders.length === 0 ? (
+                                <Text style={[styles.emptyText, { color: muteColor }]}>Không có thư mục công khai</Text>
+                            ) : (
+                                <View style={styles.cardsList}>
+                                    {folders.map(f => (
+                                        <TouchableOpacity
+                                            key={f.folderId}
+                                            style={[styles.deckCard, { backgroundColor: '#fff', borderColor: '#e5e7eb' }]}
+                                            onPress={() => router.push(`/folder/${f.folderId}` as any)}
+                                        >
+                                            <Text style={[styles.deckTitle, { color: textColor }]} numberOfLines={1}>{f.name}</Text>
+                                            {f.description ? (
+                                                <Text style={[styles.deckDescription, { color: muteColor }]} numberOfLines={2}>{f.description}</Text>
+                                            ) : null}
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )
+                        )}
                     </View>
                 </ScrollView>
             </WebContainer>
@@ -227,6 +307,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#6b7280',
         marginBottom: 12,
+    },
+    deckDescription: {
+        fontSize: 14,
+        marginBottom: 8,
     },
     deckAuthor: {
         flexDirection: 'row',

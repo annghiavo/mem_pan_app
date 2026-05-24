@@ -14,6 +14,22 @@ import { Audio } from 'expo-av';
 import { checkWrittenAnswer } from '../../utils/learningLogic';
 import { WebContainer } from '../../components/ui/WebContainer';
 
+const langNameMap: Record<string, string> = {
+  vi: 'Tiếng Việt',
+  en: 'Tiếng Anh',
+  es: 'Tiếng Tây Ban Nha',
+  fr: 'Tiếng Pháp',
+  it: 'Tiếng Ý',
+  de: 'Tiếng Đức',
+  ru: 'Tiếng Nga',
+  ja: 'Tiếng Nhật',
+  ja_romaji: 'Tiếng Nhật (Romaji)',
+  zh_hans: 'Tiếng Trung (Giản thể)',
+  zh_hant: 'Tiếng Trung (Phồn thể)',
+  zh_pinyin: 'Tiếng Trung (Pinyin)',
+  ko: 'Tiếng Hàn',
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type QuestionType = 'mc' | 'written';
@@ -33,6 +49,7 @@ type QuizQuestion = {
   key: QuestionKey;
   cardId: string;
   type: QuestionType;
+  direction: 'front-to-back' | 'back-to-front';
   questionText: string;
   imageUrl?: string;
   correctAnswer: string;
@@ -70,6 +87,8 @@ function buildRoundQuestions(
   keys: QuestionKey[],
   cardsMap: Record<string, any>,
   allCards: any[],
+  settings: StudySettings,
+  appearancesMap: Record<string, number>
 ): QuizQuestion[] {
   const list: QuizQuestion[] = [];
   for (const key of keys) {
@@ -77,20 +96,39 @@ function buildRoundQuestions(
     const card = cardsMap[cardId];
     if (!card) continue;
 
+    // Track appearance for this specific building iteration
+    const currentAppearance = (appearancesMap[cardId] || 0) + 1;
+    appearancesMap[cardId] = currentAppearance;
+
+    // Determine direction
+    let direction: 'front-to-back' | 'back-to-front' = 'front-to-back';
+    if (settings.answerWithDefinition && !settings.answerWithTerm) {
+      direction = 'front-to-back'; // Question = Front, Answer = Back
+    } else if (settings.answerWithTerm && !settings.answerWithDefinition) {
+      direction = 'back-to-front'; // Question = Back, Answer = Front
+    } else {
+      // Both selected: alternate based on appearances
+      direction = currentAppearance % 2 === 1 ? 'front-to-back' : 'back-to-front';
+    }
+
+    const questionText = direction === 'front-to-back' ? card.contentFront : card.contentBack;
+    const correctAnswer = direction === 'front-to-back' ? card.contentBack : card.contentFront;
+
     if (type === 'mc') {
       const others = allCards.filter((c: any) => c.cardId !== cardId);
       const wrong = [...others]
         .sort(() => Math.random() - 0.5)
         .slice(0, 3)
-        .map((c: any) => c.contentBack);
-      const opts = [card.contentBack, ...wrong].sort(() => Math.random() - 0.5);
+        .map((c: any) => direction === 'front-to-back' ? c.contentBack : c.contentFront);
+      const opts = [correctAnswer, ...wrong].sort(() => Math.random() - 0.5);
       list.push({
         key,
         cardId,
         type: 'mc',
-        questionText: card.contentFront,
+        direction,
+        questionText,
         imageUrl: card.imageUrl,
-        correctAnswer: card.contentBack,
+        correctAnswer,
         options: opts,
       });
     } else {
@@ -98,9 +136,10 @@ function buildRoundQuestions(
         key,
         cardId,
         type: 'written',
-        questionText: card.contentFront,
+        direction,
+        questionText,
         imageUrl: card.imageUrl,
-        correctAnswer: card.contentBack,
+        correctAnswer,
       });
     }
   }
@@ -162,6 +201,10 @@ export default function QuizScreen() {
   const cardsMapRef = useRef<Record<string, any>>({});
   const allCardsRef = useRef<any[]>([]);
   const settingsRef = useRef<StudySettings>(defaultStudySettings);
+  const cardAppearancesRef = useRef<Record<string, number>>({});
+
+  const [langFrontLabel, setLangFrontLabel] = useState('Thuật ngữ');
+  const [langBackLabel, setLangBackLabel] = useState('Định nghĩa');
 
   // ─── Round system ─────────────────────────────────────────────────────────
   // Pools hold question keys (cardId+type), not raw cardIds — so with
@@ -237,6 +280,14 @@ export default function QuizScreen() {
       const map: Record<string, any> = {};
       cards.forEach((c: any) => { map[c.cardId] = c; });
 
+      if (cards.length > 0) {
+        const firstCard = cards[0];
+        setLangFrontLabel(firstCard.langFront ? (langNameMap[firstCard.langFront] || firstCard.langFront) : 'Thuật ngữ');
+        setLangBackLabel(firstCard.langBack ? (langNameMap[firstCard.langBack] || firstCard.langBack) : 'Định nghĩa');
+      }
+
+      cardAppearancesRef.current = {};
+
       const loadedSettings = settingsRes?.settings
         ? mergeSettings(settingsRes.settings)
         : defaultStudySettings;
@@ -280,7 +331,7 @@ export default function QuizScreen() {
       const firstBatchKeys = allKeys.slice(0, batchSize);
       const remaining = allKeys.slice(batchSize);
 
-      setCurrentBatch(buildRoundQuestions(firstBatchKeys, map, cards));
+      setCurrentBatch(buildRoundQuestions(firstBatchKeys, map, cards, loadedSettings, cardAppearancesRef.current));
       setPendingPool(remaining);
     } catch (err) {
       console.error('Quiz init error:', err);
@@ -370,7 +421,7 @@ export default function QuizScreen() {
     const remaining = newPool.slice(batchSize);
 
     setCurrentBatch(
-      buildRoundQuestions(batchKeys, cardsMapRef.current, allCardsRef.current),
+      buildRoundQuestions(batchKeys, cardsMapRef.current, allCardsRef.current, settingsRef.current, cardAppearancesRef.current),
     );
     setPendingPool(remaining);
     setBatchIndex(0);
@@ -609,7 +660,9 @@ export default function QuizScreen() {
 
           {/* Question */}
           <View style={styles.questionBlock}>
-            <Text style={[styles.questionLabel, { color: theme.textMuted }]}>Định nghĩa</Text>
+            <Text style={[styles.questionLabel, { color: theme.textMuted }]}>
+              {currentQuestion.direction === 'front-to-back' ? langFrontLabel : langBackLabel}
+            </Text>
             {currentQuestion.imageUrl ? (
               <Image
                 source={{ uri: currentQuestion.imageUrl }}
@@ -626,7 +679,7 @@ export default function QuizScreen() {
           {isMC && (
             <View>
               <Text style={[styles.optionsLabel, { color: theme.textMuted }]}>
-                Chọn thuật ngữ đúng
+                Chọn {currentQuestion.direction === 'front-to-back' ? langBackLabel.toLowerCase() : langFrontLabel.toLowerCase()} đúng
               </Text>
               {currentQuestion.options!.map((opt, index) => {
                 const isSelected = selectedOption === index;
