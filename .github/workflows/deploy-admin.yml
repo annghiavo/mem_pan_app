@@ -33,6 +33,9 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+          VITE_AUTH_API_BASE_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev"
+          VITE_ADMIN_API_BASE_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev"
+          VITE_MAIN_APP_URL: "https://mem-pan-mb.vercel.app"
         working-directory: ./mem_pan_admin/admin-web
 
       - name: Deploy Project Artifacts to Vercel

@@ -37,6 +37,7 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_MB }}
+          EXPO_PUBLIC_API_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1"
         working-directory: ./mem_pan_mb
 
       - name: Deploy Project Artifacts to Vercel
