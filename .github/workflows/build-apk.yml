@@ -1,0 +1,72 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags like v1.0.0
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag name for the release (e.g. v1.0.0-beta)'
+        required: false
+        default: 'v1.0.0-manual'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a GitHub Release
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm install
+        working-directory: ./mem_pan_mb
+
+      - name: Prebuild Android
+        run: npx expo prebuild --platform android --clean
+        working-directory: ./mem_pan_mb
+        env:
+          EXPO_PUBLIC_API_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1"
+
+      - name: Build APK
+        run: ./gradlew assembleRelease
+        working-directory: ./mem_pan_mb/android
+
+      - name: Determine Tag Name
+        id: tag_name
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+          else
+            echo "TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          body: |
+            ### 📱 Android APK
+            Download the attached `app-release.apk` below to install the Mem Pan App on your Android device.
+
+            ### 🌐 Live Web Versions
+            - **Main Web App:** https://mem-pan-mb.vercel.app
+            - **Admin Web App:** https://admin-web-tawny-kappa.vercel.app
+          files: ./mem_pan_mb/android/app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
