@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Required to create a GitHub Release
+    env:
+      # EXPO_PUBLIC_* vars are inlined into the JS bundle at bundling time,
+      # which happens inside `gradle assembleRelease` (not in prebuild).
+      # Set at the job level so every step — including the gradle build — sees it.
+      EXPO_PUBLIC_API_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1"
 
     steps:
       - name: Checkout Repository
@@ -39,8 +44,6 @@ jobs:
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
         working-directory: ./mem_pan_mb
-        env:
-          EXPO_PUBLIC_API_URL: "https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1"
 
       - name: Build APK
         run: ./gradlew assembleRelease

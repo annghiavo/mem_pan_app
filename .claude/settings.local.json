@@ -3,7 +3,9 @@
     "allow": [
       "Bash(node -e \"const fs = require\\('fs'\\); const src = fs.readFileSync\\('services/api.ts', 'utf8'\\); console.log\\(src.includes\\('No new image file: send JSON'\\) ? 'FIX OK' : 'FIX NOT APPLIED'\\)\")",
       "Bash(npx tsc *)",
-      "Bash(node -e \"require\\('./metro.config.js'\\)\")"
+      "Bash(node -e \"require\\('./metro.config.js'\\)\")",
+      "Bash(git ls-files *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }
