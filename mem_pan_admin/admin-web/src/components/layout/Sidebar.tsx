@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Flag, Users, Layers, LogOut, Mail, ShieldCheck } from "lucide-react";
+import { Flag, Users, Layers, LogOut, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 
@@ -12,6 +12,7 @@ interface NavLink {
 
 const LINKS: NavLink[] = [
   { to: "/reports", icon: Flag, label: "Reports" },
+  { to: "/appeals", icon: ShieldAlert, label: "Appeals" },
   { to: "/users", icon: Users, label: "Users" },
   { to: "/decks", icon: Layers, label: "Decks" },
   { to: "/email-templates", icon: Mail, label: "Email Templates", adminOnly: true },

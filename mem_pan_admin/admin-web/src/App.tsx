@@ -10,6 +10,8 @@ import DecksPage from "./pages/DecksPage";
 import DeckDetailPage from "./pages/DeckDetailPage";
 import EmailTemplatesPage from "./pages/EmailTemplatesPage";
 import ModeratorsPage from "./pages/ModeratorsPage";
+import AppealsPage from "./pages/AppealsPage";
+import AppealPage from "./pages/AppealPage";
 
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
@@ -58,7 +60,11 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
+          {/* Public — opened from the deck-deletion email. No auth required. */}
+          <Route path="/appeal" element={<AppealPage />} />
+
           <Route path="/reports" element={<PrivateRoute><ReportsPage /></PrivateRoute>} />
+          <Route path="/appeals" element={<PrivateRoute><AppealsPage /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
           <Route path="/users/:id" element={<PrivateRoute><UserDetailPage /></PrivateRoute>} />
           <Route path="/decks" element={<PrivateRoute><DecksPage /></PrivateRoute>} />
