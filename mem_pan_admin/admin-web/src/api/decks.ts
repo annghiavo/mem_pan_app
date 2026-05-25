@@ -3,11 +3,13 @@ import { adminApi } from "./client";
 export type DeckStatus = "active" | "hidden" | "deleted";
 
 export interface Deck {
-  id: string;
-  title: string;
-  ownerId: string;
+  deckId: string;
+  userId: string;
+  name: string;
+  description: string;
+  isPublic: boolean;
   status: DeckStatus;
-  cardCount?: number;
+  cardCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,6 +23,7 @@ export interface ListDecksParams {
 export interface ListDecksResponse {
   decks: Deck[];
   nextPageToken: string;
+  total?: string;
 }
 
 export interface UpdateDeckStatusPayload {

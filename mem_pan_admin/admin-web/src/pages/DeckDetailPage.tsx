@@ -20,18 +20,27 @@ export default function DeckDetailPage() {
   const passedDeck = (location.state as LocationState | null)?.deck;
   const qc = useQueryClient();
 
-  // The deck service has no single-deck GET endpoint. When we don't have the deck
-  // from router state (e.g. deep-linked from a report), scan ListDecks instead.
+  // The admin deck service has no single-deck GET endpoint. When we don't have the
+  // deck from router state (e.g. deep-linked from a report), scan ListDecks across
+  // every status so we still find decks that were already soft-deleted.
   const { data: scannedDeck, isLoading: scanLoading } = useQuery({
     queryKey: ["deck", id],
     queryFn: async () => {
-      let pageToken = "";
-      for (let i = 0; i < 20; i++) {
-        const res = await listDecks({ pageSize: 100, pageToken });
-        const hit = res.decks.find((d) => d.id === id);
-        if (hit) return hit;
-        if (!res.nextPageToken) return null;
-        pageToken = res.nextPageToken;
+      const statuses: (DeckStatus | undefined)[] = [
+        undefined,
+        "active",
+        "hidden",
+        "deleted",
+      ];
+      for (const statusFilter of statuses) {
+        let pageToken = "";
+        for (let i = 0; i < 20; i++) {
+          const res = await listDecks({ pageSize: 100, pageToken, statusFilter });
+          const hit = res.decks.find((d) => d.deckId === id);
+          if (hit) return hit;
+          if (!res.nextPageToken) break;
+          pageToken = res.nextPageToken;
+        }
       }
       return null;
     },
@@ -112,9 +121,9 @@ export default function DeckDetailPage() {
             }}
           >
             <div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 600 }}>{deck.title || "(untitled deck)"}</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 600 }}>{deck.name || "(untitled deck)"}</div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>
-                {deck.id}
+                {deck.deckId}
               </div>
             </div>
             {statusColor && (
@@ -175,8 +184,8 @@ export default function DeckDetailPage() {
             <>
               <dt style={{ color: "var(--text-muted)" }}>Owner</dt>
               <dd>
-                <Link to={`/users/${deck.ownerId}`} style={{ fontFamily: "monospace" }}>
-                  {deck.ownerId}
+                <Link to={`/users/${deck.userId}`} style={{ fontFamily: "monospace" }}>
+                  {deck.userId}
                 </Link>
               </dd>
 

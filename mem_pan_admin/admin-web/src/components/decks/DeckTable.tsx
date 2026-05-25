@@ -38,20 +38,20 @@ export default function DeckTable({ decks }: Props) {
             const colors = STATUS_COLORS[deck.status] ?? STATUS_COLORS.active;
             return (
               <tr
-                key={deck.id}
+                key={deck.deckId}
                 style={{ borderBottom: "1px solid var(--border-color)", transition: "background var(--transition-fast)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td style={{ padding: "1rem" }}>
-                  <div style={{ fontWeight: 500 }}>{deck.title || "(untitled deck)"}</div>
+                  <div style={{ fontWeight: 500 }}>{deck.name || "(untitled deck)"}</div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>
-                    {deck.id}
+                    {deck.deckId}
                   </div>
                 </td>
                 <td style={{ padding: "1rem" }}>
-                  <Link to={`/users/${deck.ownerId}`} style={{ fontSize: "0.8125rem", fontFamily: "monospace", color: "var(--accent-primary)" }}>
-                    {deck.ownerId}
+                  <Link to={`/users/${deck.userId}`} style={{ fontSize: "0.8125rem", fontFamily: "monospace", color: "var(--accent-primary)" }}>
+                    {deck.userId}
                   </Link>
                 </td>
                 <td style={{ padding: "1rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
@@ -78,7 +78,7 @@ export default function DeckTable({ decks }: Props) {
                 </td>
                 <td style={{ padding: "1rem", textAlign: "right" }}>
                   <Link
-                    to={`/decks/${deck.id}`}
+                    to={`/decks/${deck.deckId}`}
                     state={{ deck }}
                     className="btn btn-secondary"
                     style={{
