@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { ReportSheet } from '../../components/ui/ReportSheet';
+import { formatNextReview } from '../../utils/timeFormatting';
 
 // Build a shareable URL for a deck. On web we use the current origin so the
 // link is directly visitable; on native we fall back to a deep link.
@@ -57,6 +58,9 @@ export default function ModuleDetailScreen() {
   const [creatorAvatar, setCreatorAvatar] = useState<string>('');
   const [currentUsername, setCurrentUsername] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  // Re-render the next-review countdown over time. The label is derived from
+  // the server's absolute timestamp; this tick just forces a recompute.
+  const [nowTick, setNowTick] = useState(Date.now());
 
   // Whether the signed-in user owns this deck. When the API returns no
   // creatorUsername (current convention for own decks — see (tabs)/index.tsx),
@@ -114,6 +118,11 @@ export default function ModuleDetailScreen() {
     };
     fetchDeckData();
   }, [id]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   if (loading) {
     return (
@@ -379,6 +388,20 @@ export default function ModuleDetailScreen() {
         <Text style={[styles.progressDesc, { color: theme.textMuted }]}>
           Số thẻ cần ôn hiện tại: <Text style={{ fontWeight: 'bold', color: '#f59e0b' }}>{dueCount}</Text> thẻ
         </Text>
+        {(() => {
+          const nextReview = formatNextReview(progress?.nextReviewDate, progress?.dueNow, nowTick);
+          const toneColor = nextReview.tone === 'due' ? '#f59e0b' : nextReview.tone === 'soon' ? theme.primary : theme.textMuted;
+          const icon = nextReview.tone === 'due' ? 'alarm' : nextReview.tone === 'soon' ? 'time-outline' : 'calendar-outline';
+          return (
+            <View style={[styles.nextReviewBanner, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
+              <Ionicons name={icon as any} size={20} color={toneColor} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.nextReviewLabel, { color: theme.textMuted }]}>Lần ôn tập tiếp theo</Text>
+                <Text style={[styles.nextReviewValue, { color: toneColor }]}>{nextReview.label}</Text>
+              </View>
+            </View>
+          );
+        })()}
         <View style={styles.progressStats}>
           <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)} disabled={cards.length === 0}>
             <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
@@ -666,7 +689,10 @@ const styles = StyleSheet.create({
   actionButton: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   actionButtonText: { marginLeft: 16, fontSize: 16, fontWeight: '600', flex: 1 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  progressDesc: { fontSize: 15, lineHeight: 22, marginBottom: 16 },
+  progressDesc: { fontSize: 15, lineHeight: 22, marginBottom: 12 },
+  nextReviewBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, marginBottom: 16, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 1 },
+  nextReviewLabel: { fontSize: 12, marginBottom: 2 },
+  nextReviewValue: { fontSize: 16, fontWeight: '700' },
   progressStats: { marginBottom: 32 },
   statCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   statRing: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
