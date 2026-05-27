@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks } from '../../services/api';
+import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks } from '../../services/api';
 
 // Web specific hoverable wrapper
 function HoverableCard({ children, style, onPress, theme }: any) {
@@ -43,6 +43,7 @@ export default function HomeWebScreen() {
 
     const [studySessions, setStudySessions] = useState<any[]>([]);
     const [recentDecks, setRecentDecks] = useState<any[]>([]);
+    const [topDecks, setTopDecks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [username, setUsername] = useState('');
@@ -97,6 +98,15 @@ export default function HomeWebScreen() {
                     merged.push(d);
                 }
                 setRecentDecks(merged.slice(0, 10));
+            } catch (error) { }
+
+            // "Được học nhiều nhất" — top public decks by learners (trending 7 days).
+            try {
+                const topRes = await getTopPublicDecks(20);
+                const tops = (topRes.decks || [])
+                    .map((item: any) => ({ ...item.deck, learnerCount: item.learnerCount ?? 0 }))
+                    .filter((d: any) => d?.deckId);
+                setTopDecks(tops);
             } catch (error) { }
         } finally {
             setLoading(false);
@@ -201,6 +211,31 @@ export default function HomeWebScreen() {
                                         <View style={styles.recentInfo}>
                                             <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
                                             <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ</Text>
+                                        </View>
+                                    </HoverableCard>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Được học nhiều nhất - Top public decks by learners */}
+                    {topDecks.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
+                            <View style={styles.gridContainerSmall}>
+                                {topDecks.map((deck, idx) => (
+                                    <HoverableCard
+                                        key={`top-${idx}`}
+                                        theme={theme}
+                                        style={[styles.recentItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                                        onPress={() => router.push(`/module/${deck.deckId}` as any)}
+                                    >
+                                        <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
+                                            <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 18 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
+                                        </View>
+                                        <View style={styles.recentInfo}>
+                                            <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                                            <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ • {deck.learnerCount || 0} người học</Text>
                                         </View>
                                     </HoverableCard>
                                 ))}

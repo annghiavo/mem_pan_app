@@ -340,6 +340,14 @@ export const getPublicDecks = (page = 1, pageSize = 20, userId?: string) => {
   return request(`/decks/public?${params.toString()}`);
 };
 
+// Top public decks by number of learners within the trending window (default
+// last 7 days). Response: { decks: [{ deck, learnerCount }] }.
+export const getTopPublicDecks = (limit = 20, windowDays?: number) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (windowDays && windowDays > 0) params.set('windowDays', String(windowDays));
+  return request(`/decks/public/top?${params.toString()}`);
+};
+
 export const getPublicFolders = (page = 1, pageSize = 20, userId?: string) => {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (userId) params.set('userId', userId);

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks } from '../../services/api';
+import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks } from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -20,6 +20,7 @@ export default function HomeScreen() {
 
   const [studySessions, setStudySessions] = useState<any[]>([]);
   const [recentDecks, setRecentDecks] = useState<any[]>([]);
+  const [topDecks, setTopDecks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -96,6 +97,17 @@ export default function HomeScreen() {
         setRecentDecks(merged.slice(0, 6));
       } catch (error) {
         console.error('Error fetching recent decks', error);
+      }
+
+      // "Được học nhiều nhất" — top public decks by learners (trending 7 days).
+      try {
+        const topRes = await getTopPublicDecks(20);
+        const tops = (topRes.decks || [])
+          .map((item: any) => ({ ...item.deck, learnerCount: item.learnerCount ?? 0 }))
+          .filter((d: any) => d?.deckId);
+        setTopDecks(tops);
+      } catch (error) {
+        console.error('Error fetching top decks', error);
       }
     } finally {
       setLoading(false);
@@ -196,6 +208,30 @@ export default function HomeScreen() {
                       <View style={styles.recentInfo}>
                         <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
                         <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thẻ • Tác giả: {deck.creatorUsername === username ? 'Bạn' : (deck.creatorUsername || 'Bạn')}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
+        {/* Được học nhiều nhất - Top public decks by learners (2-row grid) */}
+        {topDecks.length > 0 ? (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {Array.from({ length: Math.ceil(topDecks.length / 2) }).map((_, colIdx) => (
+                <View key={`top-col-${colIdx}`} style={styles.recentColumn}>
+                  {topDecks.slice(colIdx * 2, colIdx * 2 + 2).map((deck, rowIdx) => (
+                    <TouchableOpacity key={`top-${colIdx}-${rowIdx}`} style={[styles.recentItemHorizontal, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                      <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
+                        <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 16 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.recentInfo}>
+                        <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                        <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thẻ • {deck.learnerCount || 0} người học</Text>
                       </View>
                     </TouchableOpacity>
                   ))}
