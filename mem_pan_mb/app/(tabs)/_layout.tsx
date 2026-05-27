@@ -2,10 +2,16 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Platform, useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
+
+  // Lift the floating tab bar above the OS navigation area (Android gesture /
+  // 3-button bar, iOS home indicator) so it never sits under the system buttons.
+  const bottomOffset = insets.bottom + (Platform.OS === 'ios' ? 12 : 16);
 
   return (
     <Tabs
@@ -13,7 +19,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#5865F2', // Blue-indigo color
         tabBarInactiveTintColor: isDark ? '#a1a1aa' : '#6b7280',
         headerShown: false,
-        tabBarStyle: [styles.tabBar, { backgroundColor: isDark ? '#1c1c1e' : '#ffffff' }],
+        tabBarStyle: [styles.tabBar, { backgroundColor: isDark ? '#1c1c1e' : '#ffffff', bottom: bottomOffset }],
         tabBarLabelStyle: styles.tabBarLabel,
       }}>
       <Tabs.Screen
@@ -50,7 +56,6 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 28 : 24,
     left: 20,
     right: 20,
     elevation: 10,

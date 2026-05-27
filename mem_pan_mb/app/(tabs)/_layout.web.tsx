@@ -31,7 +31,7 @@ export default function TabLayoutWeb() {
             {/* Sidebar for Desktop/Tablet */}
             <View style={[styles.sidebar, { backgroundColor: theme.surface, borderRightColor: theme.border }]}>
                 <View style={styles.logoContainer}>
-                    <Text style={[styles.logoText, { color: theme.primary }]}>MemPan</Text>
+                    <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
                 </View>
 
                 <View style={styles.navContainer}>

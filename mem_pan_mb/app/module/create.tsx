@@ -310,6 +310,21 @@ export default function CreateModuleScreen() {
       return;
     }
 
+    // Validate completeness BEFORE any backend call. A card counts as "filled"
+    // if either side has content; every filled card must have BOTH sides.
+    // Otherwise createDeck would succeed first and only the cards would fail
+    // server-side validation, leaving an orphaned empty deck behind.
+    const filledTerms = terms.filter(t => t.term.trim() || t.definition.trim());
+    if (filledTerms.length === 0) {
+      showAlert('Lỗi', 'Vui lòng nhập ít nhất một thuật ngữ');
+      return;
+    }
+    const hasIncompleteTerm = filledTerms.some(t => !t.term.trim() || !t.definition.trim());
+    if (hasIncompleteTerm) {
+      showAlert('Lỗi', 'Vui lòng nhập đầy đủ cả thuật ngữ và định nghĩa cho mỗi thẻ');
+      return;
+    }
+
     if (isEditMode) {
       const validTerms = terms.filter(t => t.term.trim() || t.definition.trim());
       const keptCardIds = new Set(validTerms.filter(t => t.cardId).map(t => t.cardId as string));
@@ -380,11 +395,7 @@ export default function CreateModuleScreen() {
       return;
     }
 
-    const validTerms = terms.filter(t => t.term.trim() || t.definition.trim());
-    if (validTerms.length === 0) {
-      showAlert('Lỗi', 'Vui lòng nhập ít nhất một thuật ngữ');
-      return;
-    }
+    const validTerms = filledTerms;
 
     setIsLoading(true);
     try {

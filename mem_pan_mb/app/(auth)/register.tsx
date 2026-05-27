@@ -11,12 +11,19 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!email || !password || !username || !fullName) return;
-    
+    if (!email || !password || !confirmPassword || !username || !fullName) return;
+
+    if (password !== confirmPassword) {
+      showAlert('Lỗi', 'Mật khẩu nhập lại không khớp.');
+      return;
+    }
+
     setLoading(true);
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -63,7 +70,7 @@ export default function RegisterScreen() {
     }
   };
 
-  const isFormValid = email.length > 0 && password.length > 0 && username.length > 0 && fullName.length > 0;
+  const isFormValid = email.length > 0 && password.length > 0 && confirmPassword.length > 0 && username.length > 0 && fullName.length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -125,14 +132,35 @@ export default function RegisterScreen() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
               />
-              <TouchableOpacity 
-                style={styles.eyeIcon} 
+              <TouchableOpacity
+                style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
               >
-                <Ionicons 
-                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={22} 
-                  color="#8a94a6" 
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color="#8a94a6"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập lại mật khẩu"
+                placeholderTextColor="#8a94a6"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color="#8a94a6"
                 />
               </TouchableOpacity>
             </View>

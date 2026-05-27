@@ -139,14 +139,45 @@ export const clearAuth = async () => {
   await AsyncStorage.removeItem('refreshToken');
 };
 
+// Maps an HTTP status to a user-friendly Vietnamese fallback message. Used
+// whenever the server's own message is missing or unsafe to display.
+const statusFallbackMessage = (status: number): string => {
+  if (status >= 500) return 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.';
+  if (status === 404) return 'Không tìm thấy dữ liệu yêu cầu.';
+  if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
+  if (status === 400 || status === 422) return 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.';
+  return 'Có lỗi xảy ra, vui lòng thử lại.';
+};
+
+// Extracts a safe, human-readable message from an API error body. Backends may
+// send `message` as a string, an array (NestJS/class-validator), or omit it.
+// Anything that looks like a raw HTML page / stack trace (tags, or absurdly
+// long) is discarded so it never reaches the UI — we fall back to a
+// status-based message instead. The raw body is still logged for debugging.
+const extractApiMessage = (data: any, status: number): string => {
+  const raw = data?.message ?? data?.error;
+  let msg: string | undefined;
+  if (typeof raw === 'string') msg = raw;
+  else if (Array.isArray(raw)) msg = raw.filter((x) => typeof x === 'string').join('\n');
+  if (!msg || !msg.trim()) return statusFallbackMessage(status);
+  if (/<\/?[a-z][\s\S]*>/i.test(msg) || msg.length > 300) return statusFallbackMessage(status);
+  return msg.trim();
+};
+
 const handleResponse = async (response: Response, method = 'GET', url = '') => {
   const responseText = await response.text();
   let data;
   try {
     data = responseText ? JSON.parse(responseText) : {};
   } catch (e) {
+    // Server returned non-JSON (e.g. an HTML 5xx page or proxy block page).
+    // Log the raw body for debugging but never surface it to the user.
     logResponse(method, url, response.status, `<invalid JSON> ${responseText}`);
-    throw new Error(`Invalid JSON response: ${responseText}`);
+    throw new Error(
+      response.status >= 500
+        ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+        : 'Máy chủ trả về dữ liệu không hợp lệ. Vui lòng thử lại.'
+    );
   }
 
   logResponse(method, url, response.status, data);
@@ -165,7 +196,7 @@ const handleResponse = async (response: Response, method = 'GET', url = '') => {
       }
       return {};
     }
-    throw new Error(data.message || 'API request failed');
+    throw new Error(extractApiMessage(data, response.status));
   }
 
   return data;

@@ -5,7 +5,11 @@
       "Bash(npx tsc *)",
       "Bash(node -e \"require\\('./metro.config.js'\\)\")",
       "Bash(git ls-files *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git rm *)",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(git -C /Users/annghiavo/Documents/mem_pan_app diff --stat)",
+      "Bash(git -C /Users/annghiavo/Documents/mem_pan_app diff mem_pan_mb/app/\\\\\\(tabs\\\\\\)/_layout.tsx)"
     ]
   }
 }

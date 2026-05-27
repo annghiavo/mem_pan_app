@@ -397,10 +397,8 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.versionContainer}>
-              <View style={styles.logoContainer}>
-                <Text style={styles.logoText}>Q</Text>
-              </View>
-              <Text style={[styles.versionText, { color: theme.textMuted }]}>v10.32</Text>
+              <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
+              <Text style={[styles.versionText, { color: theme.textMuted }]}>v1.0.2</Text>
             </View>
           </WebContainer>
         </ScrollView>
@@ -560,19 +558,10 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 40,
   },
-  logoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#5865F2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
   logoText: {
-    color: '#ffffff',
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 8,
   },
   versionText: {
     fontSize: 14,
