@@ -122,10 +122,10 @@ const DeckRow = ({
 
       {total > 0 ? (
         <View style={styles.progressBar}>
-          <View style={{ flex: deck.newCards,       backgroundColor: '#3b82f6' }} />
-          <View style={{ flex: deck.learningCards,  backgroundColor: '#f59e0b' }} />
-          <View style={{ flex: deck.reviewCards,    backgroundColor: '#10b981' }} />
-          <View style={{ flex: deck.masteredCards,  backgroundColor: '#8b5cf6' }} />
+          <View style={{ flex: deck.newCards, backgroundColor: '#3b82f6' }} />
+          <View style={{ flex: deck.learningCards, backgroundColor: '#f59e0b' }} />
+          <View style={{ flex: deck.reviewCards, backgroundColor: '#10b981' }} />
+          <View style={{ flex: deck.masteredCards, backgroundColor: '#8b5cf6' }} />
         </View>
       ) : (
         <View style={[styles.progressBar, { backgroundColor: theme.border }]} />
@@ -151,26 +151,26 @@ const DeckRow = ({
 // ── Theme helper ───────────────────────────────────────────────────────────
 
 const buildTheme = (isDark: boolean) => ({
-  background:  isDark ? '#111111' : '#f8f9fa',
-  surface:     isDark ? '#1c1c1e' : '#ffffff',
-  text:        isDark ? '#f4f4f5' : '#1f2937',
-  textMuted:   isDark ? '#a1a1aa' : '#6b7280',
-  border:      isDark ? '#27272a' : '#f3f4f6',
-  primary:     '#5865F2',
+  background: isDark ? '#111111' : '#f8f9fa',
+  surface: isDark ? '#1c1c1e' : '#ffffff',
+  text: isDark ? '#f4f4f5' : '#1f2937',
+  textMuted: isDark ? '#a1a1aa' : '#6b7280',
+  border: isDark ? '#27272a' : '#f3f4f6',
+  primary: '#5865F2',
 });
 
-// ── Screen ─────────────────────────────────────────────────────────────────
+// ── Screen ok ─────────────────────────────────────────────────────────────────
 
 export default function AchievementsScreen() {
-  const router   = useRouter();
-  const isDark   = useColorScheme() === 'dark';
-  const theme    = buildTheme(isDark);
+  const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const theme = buildTheme(isDark);
 
-  const [stats,   setStats]   = useState<UserStatsData | null>(null);
-  const [grid,    setGrid]    = useState<HeatCell[][]>([]);
-  const [decks,   setDecks]   = useState<DeckStatData[]>([]);
+  const [stats, setStats] = useState<UserStatsData | null>(null);
+  const [grid, setGrid] = useState<HeatCell[][]>([]);
+  const [decks, setDecks] = useState<DeckStatData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(false);
+  const [error, setError] = useState(false);
 
   useFocusEffect(useCallback(() => { fetchAll(); }, []));
 
@@ -178,7 +178,7 @@ export default function AchievementsScreen() {
     try {
       setLoading(true);
       setError(false);
-      const today      = toLocalDateStr(new Date());
+      const today = toLocalDateStr(new Date());
       const oneYearAgo = toLocalDateStr(new Date(Date.now() - 365 * 86_400_000));
 
       const [sRes, hRes, dRes] = await Promise.allSettled([
@@ -243,72 +243,72 @@ export default function AchievementsScreen() {
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <WebContainer maxWidth={900} paddingHorizontal={0}>
-          {/* Streak banner */}
-          <View style={[styles.streakBanner, { backgroundColor: theme.surface }]}>
-            <View style={styles.streakMain}>
-              <Text style={styles.streakFire}>🔥</Text>
-              <Text style={[styles.streakCount, { color: theme.text }]}>
-                {stats?.currentStreak ?? 0}
-              </Text>
-              <Text style={[styles.streakUnit, { color: theme.textMuted }]}>ngày liên tiếp</Text>
+            {/* Streak banner */}
+            <View style={[styles.streakBanner, { backgroundColor: theme.surface }]}>
+              <View style={styles.streakMain}>
+                <Text style={styles.streakFire}>🔥</Text>
+                <Text style={[styles.streakCount, { color: theme.text }]}>
+                  {stats?.currentStreak ?? 0}
+                </Text>
+                <Text style={[styles.streakUnit, { color: theme.textMuted }]}>ngày liên tiếp</Text>
+              </View>
+              <View style={[styles.streakSep, { backgroundColor: theme.border }]} />
+              <View style={styles.streakBest}>
+                <Text style={[styles.streakBestVal, { color: theme.text }]}>
+                  {stats?.longestStreak ?? 0}
+                </Text>
+                <Text style={[styles.streakBestLabel, { color: theme.textMuted }]}>dài nhất</Text>
+              </View>
             </View>
-            <View style={[styles.streakSep, { backgroundColor: theme.border }]} />
-            <View style={styles.streakBest}>
-              <Text style={[styles.streakBestVal, { color: theme.text }]}>
-                {stats?.longestStreak ?? 0}
-              </Text>
-              <Text style={[styles.streakBestLabel, { color: theme.textMuted }]}>dài nhất</Text>
-            </View>
-          </View>
 
-          {/* Stats grid */}
-          <View style={styles.statsGrid}>
-            <StatCard icon="library-outline"          iconColor="#3b82f6" value={String(stats?.totalReviews ?? 0)}                           label="Lần ôn tập"    theme={theme} isDark={isDark} />
-            <StatCard icon="layers-outline"            iconColor="#8b5cf6" value={String(stats?.totalCards ?? 0)}                             label="Thẻ đã tạo"    theme={theme} isDark={isDark} />
-            <StatCard icon="time-outline"              iconColor="#f59e0b" value={stats ? formatStudyTime(stats.totalStudyTimeMs) : '0p'}     label="Thời gian học" theme={theme} isDark={isDark} />
-            <StatCard icon="checkmark-circle-outline"  iconColor="#10b981" value={accuracy !== null ? `${accuracy}%` : '–'}                  label="Độ chính xác"  theme={theme} isDark={isDark} />
-          </View>
-
-          {/* Activity calendar */}
-          <View style={[styles.section, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Hoạt động</Text>
-            {/* Day-of-week header */}
-            <View style={styles.calDayRow}>
-              {DAY_LABELS.map((label) => (
-                <Text key={label} style={[styles.calDayLabel, { color: theme.textMuted }]}>{label}</Text>
-              ))}
+            {/* Stats grid */}
+            <View style={styles.statsGrid}>
+              <StatCard icon="library-outline" iconColor="#3b82f6" value={String(stats?.totalReviews ?? 0)} label="Lần ôn tập" theme={theme} isDark={isDark} />
+              <StatCard icon="layers-outline" iconColor="#8b5cf6" value={String(stats?.totalCards ?? 0)} label="Thẻ đã tạo" theme={theme} isDark={isDark} />
+              <StatCard icon="time-outline" iconColor="#f59e0b" value={stats ? formatStudyTime(stats.totalStudyTimeMs) : '0p'} label="Thời gian học" theme={theme} isDark={isDark} />
+              <StatCard icon="checkmark-circle-outline" iconColor="#10b981" value={accuracy !== null ? `${accuracy}%` : '–'} label="Độ chính xác" theme={theme} isDark={isDark} />
             </View>
-            {/* Week rows */}
-            {grid.map((week, wi) => (
-              <View key={wi} style={styles.calDayRow}>
-                {week.map((cell) => (
-                  <View
-                    key={cell.date}
-                    style={[
-                      styles.calDot,
-                      cell.isFuture
-                        ? { backgroundColor: 'transparent' }
-                        : cell.count > 0
-                          ? { backgroundColor: theme.primary }
-                          : { backgroundColor: isDark ? '#2a2a2d' : '#e5e7eb' },
-                    ]}
-                  />
+
+            {/* Activity calendar */}
+            <View style={[styles.section, { backgroundColor: theme.surface }]}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Hoạt động</Text>
+              {/* Day-of-week header */}
+              <View style={styles.calDayRow}>
+                {DAY_LABELS.map((label) => (
+                  <Text key={label} style={[styles.calDayLabel, { color: theme.textMuted }]}>{label}</Text>
                 ))}
               </View>
-            ))}
-          </View>
-
-          {/* Deck breakdown */}
-          {decks.length > 0 && (
-            <View style={[styles.section, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Tiến độ bộ thẻ</Text>
-              {decks.map((deck) => (
-                <DeckRow key={deck.deckId} deck={deck} theme={theme} />
+              {/* Week rows */}
+              {grid.map((week, wi) => (
+                <View key={wi} style={styles.calDayRow}>
+                  {week.map((cell) => (
+                    <View
+                      key={cell.date}
+                      style={[
+                        styles.calDot,
+                        cell.isFuture
+                          ? { backgroundColor: 'transparent' }
+                          : cell.count > 0
+                            ? { backgroundColor: theme.primary }
+                            : { backgroundColor: isDark ? '#2a2a2d' : '#e5e7eb' },
+                      ]}
+                    />
+                  ))}
+                </View>
               ))}
             </View>
-          )}
 
-          <View style={{ height: 24 }} />
+            {/* Deck breakdown */}
+            {decks.length > 0 && (
+              <View style={[styles.section, { backgroundColor: theme.surface }]}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Tiến độ bộ thẻ</Text>
+                {decks.map((deck) => (
+                  <DeckRow key={deck.deckId} deck={deck} theme={theme} />
+                ))}
+              </View>
+            )}
+
+            <View style={{ height: 24 }} />
           </WebContainer>
         </ScrollView>
       )}
@@ -319,8 +319,8 @@ export default function AchievementsScreen() {
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container:      { flex: 1 },
-  center:         { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1,
@@ -330,12 +330,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     elevation: 2, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2,
   },
-  headerTitle:    { fontSize: 18, fontWeight: 'bold' },
-  errorText:      { fontSize: 15 },
-  retryBtn:       { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
-  retryText:      { fontSize: 15, fontWeight: '600' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold' },
+  errorText: { fontSize: 15 },
+  retryBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
+  retryText: { fontSize: 15, fontWeight: '600' },
 
-  scrollContent:  { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
 
   // Streak
   streakBanner: {
@@ -343,14 +343,14 @@ const styles = StyleSheet.create({
     borderRadius: 16, padding: 20,
     elevation: 1, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2,
   },
-  streakMain:     { flex: 1, alignItems: 'center', gap: 2 },
-  streakFire:     { fontSize: 36 },
-  streakCount:    { fontSize: 40, fontWeight: 'bold', lineHeight: 44 },
-  streakUnit:     { fontSize: 13 },
-  streakSep:      { width: 1, height: 60, marginHorizontal: 16 },
-  streakBest:     { flex: 1, alignItems: 'center', gap: 4 },
-  streakBestVal:  { fontSize: 28, fontWeight: 'bold' },
-  streakBestLabel:{ fontSize: 13 },
+  streakMain: { flex: 1, alignItems: 'center', gap: 2 },
+  streakFire: { fontSize: 36 },
+  streakCount: { fontSize: 40, fontWeight: 'bold', lineHeight: 44 },
+  streakUnit: { fontSize: 13 },
+  streakSep: { width: 1, height: 60, marginHorizontal: 16 },
+  streakBest: { flex: 1, alignItems: 'center', gap: 4 },
+  streakBestVal: { fontSize: 28, fontWeight: 'bold' },
+  streakBestLabel: { fontSize: 13 },
 
   // Stats grid
   statsGrid: {
@@ -361,31 +361,31 @@ const styles = StyleSheet.create({
     elevation: 1, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2,
     gap: 6,
   },
-  statIconBox:    { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  statValue:      { fontSize: 22, fontWeight: 'bold' },
-  statLabel:      { fontSize: 12 },
+  statIconBox: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  statValue: { fontSize: 22, fontWeight: 'bold' },
+  statLabel: { fontSize: 12 },
 
   // Section card
   section: {
     borderRadius: 16, padding: 16,
     elevation: 1, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2,
   },
-  sectionTitle:   { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
 
   // Activity calendar
-  calDayRow:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  calDayLabel:    { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600' },
-  calDot:         { flex: 1, aspectRatio: 1, borderRadius: 99, marginHorizontal: 2 },
+  calDayRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  calDayLabel: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600' },
+  calDot: { flex: 1, aspectRatio: 1, borderRadius: 99, marginHorizontal: 2 },
 
   // Deck rows
-  deckRow:        { paddingTop: 14, borderTopWidth: 1, marginTop: 2 },
-  deckHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  deckName:       { fontSize: 14, fontWeight: '600', flex: 1, marginRight: 8 },
-  dueBadge:       { backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  dueBadgeText:   { fontSize: 11, color: '#92400e', fontWeight: '600' },
-  progressBar:    { height: 8, borderRadius: 4, overflow: 'hidden', flexDirection: 'row' },
-  deckLegend:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  legendDot:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot:            { width: 8, height: 8, borderRadius: 4 },
+  deckRow: { paddingTop: 14, borderTopWidth: 1, marginTop: 2 },
+  deckHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  deckName: { fontSize: 14, fontWeight: '600', flex: 1, marginRight: 8 },
+  dueBadge: { backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  dueBadgeText: { fontSize: 11, color: '#92400e', fontWeight: '600' },
+  progressBar: { height: 8, borderRadius: 4, overflow: 'hidden', flexDirection: 'row' },
+  deckLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  legendDot: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   legendDotLabel: { fontSize: 11 },
 });
