@@ -9,7 +9,13 @@
       "Bash(git rm *)",
       "Bash(echo \"tsc exit: $?\")",
       "Bash(git -C /Users/annghiavo/Documents/mem_pan_app diff --stat)",
-      "Bash(git -C /Users/annghiavo/Documents/mem_pan_app diff mem_pan_mb/app/\\\\\\(tabs\\\\\\)/_layout.tsx)"
+      "Bash(git -C /Users/annghiavo/Documents/mem_pan_app diff mem_pan_mb/app/\\\\\\(tabs\\\\\\)/_layout.tsx)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1/decks/public?page=1&pageSize=1\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1/decks/public/top?limit=20\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1/decks/public/top?limit=20&windowDays=3650\")",
+      "Bash(curl -s \"https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1/decks/public?page=1&pageSize=3\")",
+      "Bash(curl -s \"https://mempan-gateway-3hd0u0cm.uc.gateway.dev/v1/decks/a40e5d7f-2a9c-4826-b85a-727d1f1b09df\")",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

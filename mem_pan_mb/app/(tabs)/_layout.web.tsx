@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, useColorScheme, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, useColorScheme, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Slot, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
+const MOBILE_BREAKPOINT = 768;
 
 export default function TabLayoutWeb() {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
     const router = useRouter();
     const pathname = usePathname();
+
+    const { width } = useWindowDimensions();
+    const isMobile = width < MOBILE_BREAKPOINT;
+    const [menuOpen, setMenuOpen] = useState(false);
 
     const theme = {
         background: isDark ? '#111111' : '#f8f9fa',
@@ -26,48 +32,101 @@ export default function TabLayoutWeb() {
         { name: 'Thư viện', route: '/library', icon: 'folder-outline', activeIcon: 'folder' },
     ];
 
+    // Navigate and (on mobile) collapse the drawer so it stops blocking the screen.
+    const navigateTo = (route: string) => {
+        router.push(route as any);
+        if (isMobile) setMenuOpen(false);
+    };
+
+    const sidebar = (
+        <View
+            style={[
+                styles.sidebar,
+                { backgroundColor: theme.surface, borderRightColor: theme.border },
+                isMobile && styles.sidebarMobile,
+            ]}
+        >
+            <View style={styles.logoRow}>
+                <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
+                {isMobile && (
+                    <TouchableOpacity
+                        onPress={() => setMenuOpen(false)}
+                        style={styles.iconButton}
+                        accessibilityLabel="Đóng menu"
+                    >
+                        <Ionicons name="close" size={26} color={theme.text} />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            <View style={styles.navContainer}>
+                {navItems.map((item) => {
+                    const isActive = pathname === item.route || pathname.startsWith(item.route + '/') && item.route !== '/';
+                    // Exception for '/' since everything starts with it
+                    const exactActive = item.route === '/' ? pathname === '/' : isActive;
+                    const iconName = exactActive ? item.activeIcon : item.icon;
+
+                    return (
+                        <NavItem
+                            key={item.route}
+                            item={item}
+                            isActive={exactActive}
+                            iconName={iconName}
+                            theme={theme}
+                            onPress={() => navigateTo(item.route)}
+                        />
+                    );
+                })}
+            </View>
+
+            {/* Bottom Avatar / Settings */}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={styles.profileSection} onPress={() => navigateTo('/(profile)')}>
+                <View style={styles.avatarPlaceholder}>
+                    <Ionicons name="person" size={20} color="#fff" />
+                </View>
+                <Text style={[styles.profileText, { color: theme.text }]}>Hồ sơ</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* Sidebar for Desktop/Tablet */}
-            <View style={[styles.sidebar, { backgroundColor: theme.surface, borderRightColor: theme.border }]}>
-                <View style={styles.logoContainer}>
-                    <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
-                </View>
-
-                <View style={styles.navContainer}>
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.route || pathname.startsWith(item.route + '/') && item.route !== '/';
-                        // Exception for '/' since everything starts with it
-                        const exactActive = item.route === '/' ? pathname === '/' : isActive;
-                        const iconName = exactActive ? item.activeIcon : item.icon;
-
-                        return (
-                            <NavItem
-                                key={item.route}
-                                item={item}
-                                isActive={exactActive}
-                                iconName={iconName}
-                                theme={theme}
-                                onPress={() => router.push(item.route as any)}
-                            />
-                        );
-                    })}
-                </View>
-
-                {/* Bottom Avatar / Settings */}
-                <View style={{ flex: 1 }} />
-                <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(profile)' as any)}>
-                    <View style={styles.avatarPlaceholder}>
-                        <Ionicons name="person" size={20} color="#fff" />
-                    </View>
-                    <Text style={[styles.profileText, { color: theme.text }]}>Hồ sơ</Text>
-                </TouchableOpacity>
-            </View>
+            {/* Desktop: fixed sidebar always visible */}
+            {!isMobile && sidebar}
 
             {/* Main Content Area */}
             <View style={[styles.mainContent, { backgroundColor: theme.background }]}>
-                <Slot />
+                {/* Mobile: top bar with hamburger to reveal the menu */}
+                {isMobile && (
+                    <View style={[styles.topBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+                        <TouchableOpacity
+                            onPress={() => setMenuOpen(true)}
+                            style={styles.iconButton}
+                            accessibilityLabel="Mở menu"
+                        >
+                            <Ionicons name="menu" size={26} color={theme.text} />
+                        </TouchableOpacity>
+                        <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
+                    </View>
+                )}
+                <View style={styles.contentInner}>
+                    <Slot />
+                </View>
             </View>
+
+            {/* Mobile: collapsible drawer overlay */}
+            {isMobile && menuOpen && (
+                <View style={styles.overlay}>
+                    <TouchableOpacity
+                        style={styles.backdrop}
+                        activeOpacity={1}
+                        onPress={() => setMenuOpen(false)}
+                        accessibilityLabel="Đóng menu"
+                    />
+                    {sidebar}
+                </View>
+            )}
         </View>
     );
 }
@@ -124,7 +183,17 @@ const styles = StyleSheet.create({
         // @ts-ignore
         display: 'flex',
     },
-    logoContainer: {
+    sidebarMobile: {
+        // Inside the overlay the drawer should fill the column height.
+        height: '100%',
+        maxWidth: '80%',
+        // @ts-ignore
+        boxShadow: '2px 0 16px rgba(0,0,0,0.25)',
+    },
+    logoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 40,
         paddingHorizontal: 12,
     },
@@ -151,7 +220,46 @@ const styles = StyleSheet.create({
     },
     mainContent: {
         flex: 1,
+        flexDirection: 'column',
+        overflow: 'hidden',
+    },
+    contentInner: {
+        flex: 1,
         overflow: 'auto', // Web specific scrolling within the main view
+    },
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        flexShrink: 0,
+    },
+    iconButton: {
+        padding: 6,
+        borderRadius: 8,
+        cursor: 'pointer',
+    },
+    overlay: {
+        // @ts-ignore
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        flexDirection: 'row',
+        zIndex: 1000,
+    },
+    backdrop: {
+        // @ts-ignore
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        cursor: 'pointer',
     },
     profileSection: {
         flexDirection: 'row',
