@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import { devlog } from '../../services/devlog';
 import { ReportSheet } from '../../components/ui/ReportSheet';
+import { formatNextReview } from '../../utils/timeFormatting';
 
 function buildDeckShareUrl(deckId: string): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -75,6 +76,9 @@ export default function ModuleDetailWebScreen() {
   const [cards, setCards] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
   const [dueCount, setDueCount] = useState<number>(0);
+  // Re-render the next-review countdown over time; the label is derived from
+  // the server's absolute timestamp, this tick just forces a recompute.
+  const [nowTick, setNowTick] = useState(Date.now());
   const [creatorUsername, setCreatorUsername] = useState<string>('');
   const [creatorAvatar, setCreatorAvatar] = useState<string>('');
   const [currentUsername, setCurrentUsername] = useState<string>('');
@@ -132,6 +136,11 @@ export default function ModuleDetailWebScreen() {
     };
     fetchDeckData();
   }, [id]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   if (loading) {
     return (
@@ -363,6 +372,21 @@ export default function ModuleDetailWebScreen() {
           <Text style={[styles.progressDesc, { color: theme.textMuted }]}>
             Thẻ cần ôn: <Text style={{ fontWeight: 'bold', color: '#f59e0b' }}>{dueCount}</Text>
           </Text>
+
+          {(() => {
+            const nextReview = formatNextReview(progress?.nextReviewDate, progress?.dueNow, nowTick);
+            const toneColor = nextReview.tone === 'due' ? '#f59e0b' : nextReview.tone === 'soon' ? theme.primary : theme.textMuted;
+            const icon = nextReview.tone === 'due' ? 'alarm' : nextReview.tone === 'soon' ? 'time-outline' : 'calendar-outline';
+            return (
+              <View style={[styles.nextReviewBanner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Ionicons name={icon as any} size={20} color={toneColor} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.nextReviewLabel, { color: theme.textMuted }]}>Lần ôn tập tiếp theo</Text>
+                  <Text style={[styles.nextReviewValue, { color: toneColor }]}>{nextReview.label}</Text>
+                </View>
+              </View>
+            );
+          })()}
 
           <View style={styles.progressStatsGrid}>
             <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
@@ -626,7 +650,10 @@ const styles = StyleSheet.create({
   actionCardText: { fontSize: 16, fontWeight: '600' },
 
   sectionTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-  progressDesc: { fontSize: 16, marginBottom: 20 },
+  progressDesc: { fontSize: 16, marginBottom: 12 },
+  nextReviewBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 20 },
+  nextReviewLabel: { fontSize: 12, marginBottom: 2 },
+  nextReviewValue: { fontSize: 16, fontWeight: '700' },
   progressStatsGrid: { flexDirection: 'row', gap: 24, marginBottom: 40 },
   statCardWeb: { flex: 1, minWidth: 200, flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 12, borderWidth: 1, gap: 16 },
   statRing: { width: 44, height: 44, borderRadius: 22, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
