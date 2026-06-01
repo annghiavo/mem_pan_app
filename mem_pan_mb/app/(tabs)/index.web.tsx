@@ -46,6 +46,7 @@ export default function HomeWebScreen() {
     const [topDecks, setTopDecks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [username, setUsername] = useState('');
 
     const fetchData = useCallback(async () => {
@@ -81,7 +82,7 @@ export default function HomeWebScreen() {
                         recentSessionDecks.slice(0, 10).map(async (d: any) => {
                             try {
                                 const deckRes = await getDeck(d.deckId);
-                                return { ...d, ...deckRes.deck };
+                                return { ...d, ...deckRes.deck, creatorUsername: deckRes.creatorUsername || '' };
                             } catch (e) {
                                 return null;
                             }
@@ -90,9 +91,21 @@ export default function HomeWebScreen() {
                 ]);
 
                 const studiedValid = studiedDetails.filter(d => d !== null);
+                // Enrich library decks with creator info so the "Tác giả" label
+                // matches the native home screen.
+                const enrichedLib = await Promise.all(
+                    (libRes.decks || []).slice(0, 10).map(async (d: any) => {
+                        try {
+                            const deckRes = await getDeck(d.deckId);
+                            return { ...d, ...deckRes.deck, creatorUsername: deckRes.creatorUsername || '' };
+                        } catch (e) {
+                            return d;
+                        }
+                    })
+                );
                 const seen = new Set<string>();
                 const merged: any[] = [];
-                for (const d of [...studiedValid, ...(libRes.decks || [])]) {
+                for (const d of [...studiedValid, ...enrichedLib]) {
                     if (!d?.deckId || seen.has(d.deckId)) continue;
                     seen.add(d.deckId);
                     merged.push(d);
@@ -124,6 +137,7 @@ export default function HomeWebScreen() {
         getCurrentUser().then(data => {
             const u = data.user || data.data || data;
             if (u?.username) setUsername(u.username);
+            if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
         }).catch(() => { });
     }, [fetchData]);
 
@@ -137,8 +151,8 @@ export default function HomeWebScreen() {
 
                     {/* Header */}
                     <View style={styles.header}>
-                        <View>
-                            <Text style={[styles.greeting, { color: theme.text }]}>Chào mừng trở lại,</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+                            <Text style={[styles.greeting, { color: theme.text, marginBottom: 0 }]}>Chào mừng trở lại,</Text>
                             <Text style={[styles.username, { color: theme.primary }]}>{username}</Text>
                         </View>
                         <TouchableOpacity
@@ -210,7 +224,7 @@ export default function HomeWebScreen() {
                                         </View>
                                         <View style={styles.recentInfo}>
                                             <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
-                                            <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ</Text>
+                                            <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ • Tác giả: {deck.creatorUsername === username ? 'Bạn' : (deck.creatorUsername || 'Bạn')}</Text>
                                         </View>
                                     </HoverableCard>
                                 ))}
@@ -296,6 +310,24 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: 12,
         fontSize: 16,
+    },
+    avatarContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        cursor: 'pointer',
+    },
+    avatarImage: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    avatarText: {
+        color: '#ffffff',
+        fontSize: 18,
+        fontWeight: 'bold',
     },
     section: {
         marginBottom: 40,

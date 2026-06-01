@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import Papa from 'papaparse';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { formatNextReview } from '../../utils/timeFormatting';
 
@@ -92,32 +96,34 @@ export default function ModuleDetailScreen() {
   const [cardImage, setCardImage] = useState<any>(null);
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
 
-  useEffect(() => {
-    const fetchDeckData = async () => {
-      try {
-        const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
-          getDeck(id as string),
-          getDeckCards(id as string),
-          getDeckProgress(id as string).catch(() => null),
-          getDueCards(id as string).catch(() => ({ total: 0 })),
-          getCurrentUser().catch(() => null),
-        ]);
-        setDeckData(deckRes.deck);
-        setCreatorUsername(deckRes.creatorUsername || '');
-        setCreatorAvatar(deckRes.creatorAvatar || '');
-        setCards(cardsRes.cards || []);
-        setProgress(progressRes);
-        setDueCount(dueRes?.total || 0);
-        const me = meRes?.user || meRes?.data || meRes;
-        if (me?.username) setCurrentUsername(me.username);
-      } catch (error) {
-        console.error('Error fetching deck:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDeckData();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchDeckData = async () => {
+        try {
+          const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
+            getDeck(id as string),
+            getDeckCards(id as string),
+            getDeckProgress(id as string).catch(() => null),
+            getDueCards(id as string).catch(() => ({ total: 0 })),
+            getCurrentUser().catch(() => null),
+          ]);
+          setDeckData(deckRes.deck);
+          setCreatorUsername(deckRes.creatorUsername || '');
+          setCreatorAvatar(deckRes.creatorAvatar || '');
+          setCards(cardsRes.cards || []);
+          setProgress(progressRes);
+          setDueCount(dueRes?.total || 0);
+          const me = meRes?.user || meRes?.data || meRes;
+          if (me?.username) setCurrentUsername(me.username);
+        } catch (error) {
+          console.error('Error fetching deck:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDeckData();
+    }, [id])
+  );
 
   useEffect(() => {
     const t = setInterval(() => setNowTick(Date.now()), 30000);
@@ -215,6 +221,69 @@ export default function ModuleDetailScreen() {
       }
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể sao chép học phần');
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setShowOptionsModal(false);
+    if (!cards || cards.length === 0) {
+      Alert.alert('Lỗi', 'Không có thẻ nào để xuất.');
+      return;
+    }
+    try {
+      const csv = Papa.unparse(cards.map(c => ({
+        'Thuật ngữ': c.contentFront,
+        'Định nghĩa': c.contentBack
+      })));
+      const fileName = `${deckData.name.replace(/[^a-zA-Z0-9]/g, '_')}_cards.csv`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { UTI: 'public.comma-separated-values-text', mimeType: 'text/csv', dialogTitle: 'Xuất CSV' });
+      } else {
+        Alert.alert('Chia sẻ không khả dụng', 'Tính năng chia sẻ không hoạt động trên thiết bị này.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể xuất CSV');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setShowOptionsModal(false);
+    if (!cards || cards.length === 0) {
+      Alert.alert('Lỗi', 'Không có thẻ nào để xuất.');
+      return;
+    }
+    try {
+      const htmlContent = `
+        <html>
+          <head>
+            <style>
+              body { font-family: Helvetica, sans-serif; padding: 20px; }
+              h1 { text-align: center; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+              th { background-color: #f2f2f2; }
+            </style>
+          </head>
+          <body>
+            <h1>${deckData.name}</h1>
+            <p>${deckData.description || ''}</p>
+            <table>
+              <tr><th>Thuật ngữ</th><th>Định nghĩa</th></tr>
+              ${cards.map(c => "<tr><td>" + c.contentFront + "</td><td>" + c.contentBack + "</td></tr>").join('')}
+            </table>
+          </body>
+        </html>
+      `;
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf', dialogTitle: 'Xuất PDF' });
+      } else {
+        Alert.alert('Chia sẻ không khả dụng', 'Tính năng chia sẻ không hoạt động trên thiết bị này.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể xuất PDF');
     }
   };
 
@@ -493,6 +562,14 @@ export default function ModuleDetailScreen() {
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleCloneDeck}>
               <Ionicons name="copy-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Sao chép học phần</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleExportCSV}>
+              <Ionicons name="document-text-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Xuất CSV</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleExportPDF}>
+              <Ionicons name="document-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Xuất PDF</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleShareDeck}>
               <Ionicons name="share-social-outline" size={24} color={theme.textMuted} />

@@ -167,9 +167,6 @@ export default function FlashcardScreen() {
           <TouchableOpacity onPress={prevCard} disabled={currentIndex === 0} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === 0 && { backgroundColor: theme.navDisabled }]}>
             <Ionicons name="arrow-back" size={28} color={currentIndex === 0 ? theme.navDisabledIcon : theme.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.playButton}>
-            <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
           <TouchableOpacity onPress={nextCard} disabled={currentIndex === cards.length - 1} style={[styles.navButton, { backgroundColor: theme.navBg }, currentIndex === cards.length - 1 && { backgroundColor: theme.navDisabled }]}>
             <Ionicons name="arrow-forward" size={28} color={currentIndex === cards.length - 1 ? theme.navDisabledIcon : theme.primary} />
           </TouchableOpacity>
@@ -195,6 +192,5 @@ const styles = StyleSheet.create({
   cardImage: { width: '80%', height: '40%', marginBottom: 20, borderRadius: 12 },
   cardLangLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, position: 'absolute', top: 20 },
   controls: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 40, paddingHorizontal: 20 },
-  navButton: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-  playButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', shadowColor: '#5865F2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }
+  navButton: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' }
 });

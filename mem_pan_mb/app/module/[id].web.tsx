@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
 import { devlog } from '../../services/devlog';
+import Papa from 'papaparse';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { formatNextReview } from '../../utils/timeFormatting';
 
@@ -96,6 +97,7 @@ export default function ModuleDetailWebScreen() {
   const [showReportSheet, setShowReportSheet] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFolderSelectModal, setShowFolderSelectModal] = useState(false);
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [folders, setFolders] = useState<any[]>([]);
@@ -108,34 +110,36 @@ export default function ModuleDetailWebScreen() {
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    devlog.event('module:mount', { deckId: id });
-    const fetchDeckData = async () => {
-      try {
-        const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
-          getDeck(id as string),
-          getDeckCards(id as string),
-          getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
-          getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; }),
-          getCurrentUser().catch(() => null),
-        ]);
-        setDeckData(deckRes.deck);
-        setCreatorUsername(deckRes.creatorUsername || '');
-        setCreatorAvatar(deckRes.creatorAvatar || '');
-        setCards(cardsRes.cards || []);
-        setProgress(progressRes);
-        setDueCount(dueRes?.total || 0);
-        const me = meRes?.user || meRes?.data || meRes;
-        if (me?.username) setCurrentUsername(me.username);
-        devlog.info('module: deck loaded', { deckId: id, cardCount: cardsRes.cards?.length ?? 0, dueCount: dueRes?.total ?? 0 });
-      } catch (error) {
-        devlog.error('module: failed to load deck', error, { deckId: id });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDeckData();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      devlog.event('module:mount', { deckId: id });
+      const fetchDeckData = async () => {
+        try {
+          const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
+            getDeck(id as string),
+            getDeckCards(id as string),
+            getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
+            getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; }),
+            getCurrentUser().catch(() => null),
+          ]);
+          setDeckData(deckRes.deck);
+          setCreatorUsername(deckRes.creatorUsername || '');
+          setCreatorAvatar(deckRes.creatorAvatar || '');
+          setCards(cardsRes.cards || []);
+          setProgress(progressRes);
+          setDueCount(dueRes?.total || 0);
+          const me = meRes?.user || meRes?.data || meRes;
+          if (me?.username) setCurrentUsername(me.username);
+          devlog.info('module: deck loaded', { deckId: id, cardCount: cardsRes.cards?.length ?? 0, dueCount: dueRes?.total ?? 0 });
+        } catch (error) {
+          devlog.error('module: failed to load deck', error, { deckId: id });
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDeckData();
+    }, [id])
+  );
 
   useEffect(() => {
     const t = setInterval(() => setNowTick(Date.now()), 30000);
@@ -175,6 +179,23 @@ export default function ModuleDetailWebScreen() {
       setShowOptionsModal(false);
       Alert.alert('Thành công', 'Đã cập nhật học phần');
     } catch (error: any) { }
+  };
+
+  const applyVisibility = async (isPublic: boolean) => {
+    setShowVisibilityModal(false);
+    if (deckData?.isPublic === isPublic) return;
+    try {
+      const res = await updateDeckVisibility(id as string, isPublic);
+      setDeckData({ ...deckData, ...(res?.deck || { isPublic }) });
+      Alert.alert('Thành công', isPublic ? 'Học phần đã được đặt công khai' : 'Học phần đã được đặt riêng tư');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật quyền riêng tư');
+    }
+  };
+
+  const handleChangeVisibility = () => {
+    setShowOptionsModal(false);
+    setShowVisibilityModal(true);
   };
 
   const handleOpenFolderSelect = async () => {
@@ -221,6 +242,76 @@ export default function ModuleDetailWebScreen() {
       }
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể sao chép học phần');
+    }
+  };
+
+  const handleExportCSV = () => {
+    setShowOptionsModal(false);
+    if (!cards || cards.length === 0) {
+      window.alert('Không có thẻ nào để xuất.');
+      return;
+    }
+    try {
+      const csv = Papa.unparse(cards.map(c => ({
+        'Thuật ngữ': c.contentFront,
+        'Định nghĩa': c.contentBack
+      })));
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${deckData.name.replace(/[^a-zA-Z0-9]/g, '_')}_cards.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      window.alert(error.message || 'Không thể xuất CSV');
+    }
+  };
+
+  const handleExportPDF = () => {
+    setShowOptionsModal(false);
+    if (!cards || cards.length === 0) {
+      window.alert('Không có thẻ nào để xuất.');
+      return;
+    }
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        window.alert('Trình duyệt đã chặn cửa sổ pop-up. Vui lòng cho phép để in PDF.');
+        return;
+      }
+      const htmlContent = `
+        <html>
+          <head>
+            <title>${deckData.name}</title>
+            <style>
+              body { font-family: Helvetica, sans-serif; padding: 20px; }
+              h1 { text-align: center; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+              th { background-color: #f2f2f2; }
+            </style>
+          </head>
+          <body>
+            <h1>${deckData.name}</h1>
+            <p>${deckData.description || ''}</p>
+            <table>
+              <tr><th>Thuật ngữ</th><th>Định nghĩa</th></tr>
+              ${cards.map(c => "<tr><td>" + c.contentFront + "</td><td>" + c.contentBack + "</td></tr>").join('')}
+            </table>
+          </body>
+        </html>
+      `;
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    } catch (error: any) {
+      window.alert(error.message || 'Không thể xuất PDF');
     }
   };
 
@@ -469,9 +560,24 @@ export default function ModuleDetailWebScreen() {
                 <Text style={[styles.optionRowText, { color: theme.text }]}>Sửa</Text>
               </HoverableCard>
             )}
+            {isOwner && (
+              <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleChangeVisibility}>
+                <Ionicons name={deckData.isPublic ? 'globe-outline' : 'lock-closed-outline'} size={22} color={theme.textMuted} />
+                <Text style={[styles.optionRowText, { color: theme.text }]}>Quyền riêng tư</Text>
+                <Text style={{ color: theme.primary, marginLeft: 'auto', fontWeight: '600' } as any}>{deckData.isPublic ? 'Mọi người' : 'Chỉ tôi'}</Text>
+              </HoverableCard>
+            )}
             <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleCloneDeck}>
               <Ionicons name="copy-outline" size={22} color={theme.textMuted} />
               <Text style={[styles.optionRowText, { color: theme.text }]}>Sao chép học phần</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleExportCSV}>
+              <Ionicons name="document-text-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Xuất CSV</Text>
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleExportPDF}>
+              <Ionicons name="document-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Xuất PDF</Text>
             </HoverableCard>
             <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleShareDeck}>
               <Ionicons name="share-social-outline" size={22} color={theme.textMuted} />
@@ -492,6 +598,30 @@ export default function ModuleDetailWebScreen() {
             )}
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setShowOptionsModal(false)} style={styles.btnSecondary}>
+                <Text style={{ color: theme.text }}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Visibility Picker Modal (web) */}
+      <Modal visible={showVisibilityModal} transparent={true} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowVisibilityModal(false)}>
+          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Ai có thể xem</Text>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => applyVisibility(true)}>
+              <Ionicons name="globe-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Mọi người</Text>
+              {deckData.isPublic ? <Ionicons name="checkmark" size={20} color={theme.primary} style={{ marginLeft: 'auto' } as any} /> : null}
+            </HoverableCard>
+            <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => applyVisibility(false)}>
+              <Ionicons name="lock-closed-outline" size={22} color={theme.textMuted} />
+              <Text style={[styles.optionRowText, { color: theme.text }]}>Chỉ tôi</Text>
+              {!deckData.isPublic ? <Ionicons name="checkmark" size={20} color={theme.primary} style={{ marginLeft: 'auto' } as any} /> : null}
+            </HoverableCard>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setShowVisibilityModal(false)} style={styles.btnSecondary}>
                 <Text style={{ color: theme.text }}>Đóng</Text>
               </TouchableOpacity>
             </View>

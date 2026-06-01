@@ -127,12 +127,11 @@ export default function QuizSettingsScreen() {
   };
 
   const handleToggleQuestionType = (
-    field: 'questionTypeFlashcards' | 'questionTypeMultipleChoice' | 'questionTypeWritten',
+    field: 'questionTypeMultipleChoice' | 'questionTypeWritten',
     val: boolean,
   ) => {
-    const { questionTypeFlashcards: f, questionTypeMultipleChoice: mc, questionTypeWritten: w } = settings;
+    const { questionTypeMultipleChoice: mc, questionTypeWritten: w } = settings;
     const counts = [
-      field === 'questionTypeFlashcards' ? val : f,
       field === 'questionTypeMultipleChoice' ? val : mc,
       field === 'questionTypeWritten' ? val : w,
     ].filter(Boolean).length;
@@ -227,15 +226,7 @@ export default function QuizSettingsScreen() {
         {/* ─── Loại câu hỏi ─── */}
         <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>LOẠI CÂU HỎI</Text>
         <View style={[styles.section, { borderColor: theme.border }]}>
-          <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
-            <Text style={[styles.label, { color: theme.text }]}>Thẻ nhớ</Text>
-            <Switch
-              value={settings.questionTypeFlashcards}
-              onValueChange={v => handleToggleQuestionType('questionTypeFlashcards', v)}
-              trackColor={{ false: '#d1d5db', true: theme.primary }}
-              thumbColor="#ffffff"
-            />
-          </View>
+
           <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
             <Text style={[styles.label, { color: theme.text }]}>Nhiều lựa chọn</Text>
             <Switch

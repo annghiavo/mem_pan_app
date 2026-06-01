@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, useColorScheme, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, useColorScheme, Text, TouchableOpacity, useWindowDimensions, Image } from 'react-native';
 import { Slot, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { getCurrentUser } from '../../services/api';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -14,6 +15,16 @@ export default function TabLayoutWeb() {
     const { width } = useWindowDimensions();
     const isMobile = width < MOBILE_BREAKPOINT;
     const [menuOpen, setMenuOpen] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [username, setUsername] = useState('');
+
+    useEffect(() => {
+        getCurrentUser().then(data => {
+            const u = data.user || data.data || data;
+            if (u?.username) setUsername(u.username);
+            if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
+        }).catch(() => {});
+    }, []);
 
     const theme = {
         background: isDark ? '#111111' : '#f8f9fa',
@@ -82,8 +93,14 @@ export default function TabLayoutWeb() {
             {/* Bottom Avatar / Settings */}
             <View style={{ flex: 1 }} />
             <TouchableOpacity style={styles.profileSection} onPress={() => navigateTo('/(profile)')}>
-                <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={20} color="#fff" />
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary }]}>
+                    {avatarUrl ? (
+                        <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                    ) : username ? (
+                        <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
+                    ) : (
+                        <Ionicons name="person" size={20} color="#fff" />
+                    )}
                 </View>
                 <Text style={[styles.profileText, { color: theme.text }]}>Hồ sơ</Text>
             </TouchableOpacity>
@@ -277,6 +294,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#5865F2',
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 18,
+    },
+    avatarText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     profileText: {
         fontSize: 16,
