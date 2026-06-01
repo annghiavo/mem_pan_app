@@ -23,7 +23,7 @@ export default function TabLayoutWeb() {
             const u = data.user || data.data || data;
             if (u?.username) setUsername(u.username);
             if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
-        }).catch(() => {});
+        }).catch(() => { });
     }, []);
 
     const theme = {
@@ -310,4 +310,4 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
     }
-});
+} as any);

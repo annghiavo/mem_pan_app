@@ -419,4 +419,4 @@ const styles = StyleSheet.create({
     recentSubtitle: {
         fontSize: 14,
     },
-});
+} as any);
