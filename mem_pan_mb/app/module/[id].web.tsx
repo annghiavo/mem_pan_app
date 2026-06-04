@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
@@ -60,6 +60,9 @@ export default function ModuleDetailWebScreen() {
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { width: screenWidth } = useWindowDimensions();
+  const isMobile = screenWidth < 768;
+  const isTablet = screenWidth >= 768 && screenWidth < 1100;
 
   const theme = {
     background: isDark ? '#111111' : '#f8f9fa',
@@ -155,20 +158,21 @@ export default function ModuleDetailWebScreen() {
   }
 
   const handleDeleteDeck = async () => {
-    Alert.alert('Xác nhận', 'Bạn có chắc chắn muốn xóa học phần này?', [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Xóa', style: 'destructive', onPress: async () => {
-          try {
-            await deleteDeck(id as string);
-            setShowOptionsModal(false);
-            router.replace('/(tabs)/library' as any);
-          } catch (error: any) {
-            Alert.alert('Lỗi', error.message || 'Không thể xóa học phần');
-          }
-        }
+    // RN Web's Alert.alert ignores the button array so the confirm callback
+    // never fires. Use the browser's native confirm dialog instead.
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Bạn có chắc chắn muốn xóa học phần này?')
+      : true;
+    if (!confirmed) return;
+    try {
+      await deleteDeck(id as string);
+      setShowOptionsModal(false);
+      router.replace('/(tabs)/library' as any);
+    } catch (error: any) {
+      if (typeof window !== 'undefined') {
+        window.alert(error.message || 'Không thể xóa học phần');
       }
-    ]);
+    }
   };
 
   const handleUpdateDeck = async () => {
@@ -395,7 +399,7 @@ export default function ModuleDetailWebScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { borderBottomColor: theme.border, paddingHorizontal: isMobile ? 12 : 32 }]}>
         <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.iconBg }]}>
           <Ionicons name="arrow-back" size={24} color={theme.iconColor} />
           <Text style={[styles.iconButtonText, { color: theme.iconColor }]}>Trở lại</Text>
@@ -408,12 +412,12 @@ export default function ModuleDetailWebScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.contentWrapper}>
+        <View style={[styles.contentWrapper, { paddingHorizontal: isMobile ? 16 : isTablet ? 24 : 32 }]}>
 
-          <View style={styles.heroSection}>
-            <View style={styles.heroLeft}>
-              <Text style={[styles.moduleTitle, { color: theme.text }]}>{deckData.name}</Text>
-              {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted }]}>{deckData.description}</Text> : null}
+          <View style={[styles.heroSection, { flexDirection: isMobile ? 'column' : 'row' }]}>
+            <View style={[styles.heroLeft]}>
+              <Text style={[styles.moduleTitle, { color: theme.text, fontSize: isMobile ? 22 : 36 }]}>{deckData.name}</Text>
+              {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted, fontSize: isMobile ? 15 : 18 }]}>{deckData.description}</Text> : null}
 
               <View style={styles.authorContainer}>
                 {creatorAvatar ? (
@@ -428,7 +432,7 @@ export default function ModuleDetailWebScreen() {
                 <Text style={[styles.termCount, { color: theme.textMuted }]}> | {cards.length} thuật ngữ</Text>
               </View>
 
-              <View style={styles.actionsGrid}>
+              <View style={[styles.actionsGrid, { gap: isMobile ? 10 : 16 }]}>
                 <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
                   <Ionicons name="albums" size={32} color={cards.length > 0 ? "#3b82f6" : theme.textMuted} />
                   <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Flashcard</Text>
@@ -444,18 +448,20 @@ export default function ModuleDetailWebScreen() {
               </View>
             </View>
 
-            <View style={styles.heroRight}>
-              {cards.length > 0 ? (
-                <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
-                  <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
-                  <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} />
-                </TouchableOpacity>
-              ) : (
-                <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <Text style={[styles.flashcardWord, { color: theme.text }]}>Học phần trống</Text>
-                </View>
-              )}
-            </View>
+            {!isMobile && (
+              <View style={styles.heroRight}>
+                {cards.length > 0 ? (
+                  <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
+                    <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
+                    <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Text style={[styles.flashcardWord, { color: theme.text }]}>Học phần trống</Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Progress */}
@@ -479,20 +485,20 @@ export default function ModuleDetailWebScreen() {
             );
           })()}
 
-          <View style={styles.progressStatsGrid}>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
+          <View style={[styles.progressStatsGrid, { flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 24 }]}>
+            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
               <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount ?? 0}</Text>
               </View>
               <Text style={[styles.statLabel, { color: theme.text }]}>Chưa học</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}>
+            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}>
               <View style={[styles.statRing, { borderColor: '#f59e0b' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.learnCount ?? 0}</Text>
               </View>
               <Text style={[styles.statLabel, { color: theme.text }]}>Đang học</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} disabled={(progress?.memorizedCount ?? 0) === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => router.push(`/quiz/${id}?filterState=memorized` as any)}>
+            <HoverableCard theme={theme} disabled={(progress?.memorizedCount ?? 0) === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => router.push(`/quiz/${id}?filterState=memorized` as any)}>
               <View style={[styles.statRing, { borderColor: '#10b981' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.memorizedCount ?? 0}</Text>
               </View>
@@ -545,7 +551,7 @@ export default function ModuleDetailWebScreen() {
       {/* Options Modal (web) */}
       <Modal visible={showOptionsModal} transparent={true} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowOptionsModal(false)}>
-          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border }]} onStartShouldSetResponder={() => true}>
+          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 360 }]} onStartShouldSetResponder={() => true}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Tùy chọn</Text>
             <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={handleOpenFolderSelect}>
               <Ionicons name="folder-outline" size={22} color={theme.textMuted} />
@@ -608,7 +614,7 @@ export default function ModuleDetailWebScreen() {
       {/* Visibility Picker Modal (web) */}
       <Modal visible={showVisibilityModal} transparent={true} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowVisibilityModal(false)}>
-          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border }]} onStartShouldSetResponder={() => true}>
+          <View style={[styles.optionsModalContent, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 360 }]} onStartShouldSetResponder={() => true}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Ai có thể xem</Text>
             <HoverableCard theme={theme} style={[styles.optionRow, { backgroundColor: theme.surface }]} onPress={() => applyVisibility(true)}>
               <Ionicons name="globe-outline" size={22} color={theme.textMuted} />
@@ -632,7 +638,7 @@ export default function ModuleDetailWebScreen() {
       {/* Edit Deck Modal reused minimally */}
       <Modal visible={showEditModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 500 }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Sửa học phần</Text>
             <TextInput style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]} value={editName} onChangeText={setEditName} placeholder="Nhập tên học phần" placeholderTextColor={theme.textMuted} />
             <TextInput style={[styles.textInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border, marginTop: 12 }]} value={editDesc} onChangeText={setEditDesc} placeholder="Nhập mô tả" placeholderTextColor={theme.textMuted} multiline />
@@ -646,7 +652,7 @@ export default function ModuleDetailWebScreen() {
 
       <Modal visible={showFolderSelectModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 500 }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Thêm vào thư mục</Text>
             <ScrollView style={{ maxHeight: 300 }}>
               {folders.map((f) => (
@@ -677,7 +683,7 @@ export default function ModuleDetailWebScreen() {
       {/* Edit Card Modal (web) */}
       <Modal visible={showCardEditModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <View style={[styles.modalContentWeb, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 500 }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Sửa thẻ</Text>
             <Text style={[{ color: theme.text, marginBottom: 6, marginTop: 4 }]}>Thuật ngữ</Text>
             <TextInput
@@ -755,12 +761,12 @@ const styles = StyleSheet.create({
   iconButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, gap: 8 },
   iconButtonText: { fontSize: 16, fontWeight: '500' },
   headerRight: { flexDirection: 'row' },
-  scrollContent: { alignItems: 'center', paddingVertical: 32 },
-  contentWrapper: { width: '100%', maxWidth: 1100, paddingHorizontal: 32 },
+  scrollContent: { alignItems: 'center', paddingVertical: 24 },
+  contentWrapper: { width: '100%', maxWidth: 1100 },
 
-  heroSection: { flexDirection: 'row', gap: 40, flexWrap: 'wrap', marginBottom: 40 },
-  heroLeft: { flex: 1, minWidth: 400 },
-  heroRight: { flex: 1, minWidth: 350 },
+  heroSection: { gap: 32, marginBottom: 32 },
+  heroLeft: { flex: 1 },
+  heroRight: { flex: 1 },
 
   flashcardPreview: { height: 300, width: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1, position: 'relative' },
   flashcardWord: { fontSize: 32, fontWeight: '500', textAlign: 'center', paddingHorizontal: 24 },
@@ -775,17 +781,17 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 16, fontWeight: '600' },
   termCount: { fontSize: 16 },
 
-  actionsGrid: { flexDirection: 'row', gap: 16 },
-  actionCard: { flex: 1, paddingVertical: 24, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 12 },
-  actionCardText: { fontSize: 16, fontWeight: '600' },
+  actionsGrid: { flexDirection: 'row', gap: 12 },
+  actionCard: { flex: 1, paddingVertical: 16, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 8 },
+  actionCardText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
 
   sectionTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
   progressDesc: { fontSize: 16, marginBottom: 12 },
   nextReviewBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 20 },
   nextReviewLabel: { fontSize: 12, marginBottom: 2 },
   nextReviewValue: { fontSize: 16, fontWeight: '700' },
-  progressStatsGrid: { flexDirection: 'row', gap: 24, marginBottom: 40 },
-  statCardWeb: { flex: 1, minWidth: 200, flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 12, borderWidth: 1, gap: 16 },
+  progressStatsGrid: { flexDirection: 'row', gap: 16, marginBottom: 32 },
+  statCardWeb: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, borderWidth: 1, gap: 12 },
   statRing: { width: 44, height: 44, borderRadius: 22, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
   statNumber: { fontSize: 16, fontWeight: 'bold' },
   statLabel: { fontSize: 18, fontWeight: '600' },
@@ -804,7 +810,7 @@ const styles = StyleSheet.create({
   actionIconCell: { padding: 8, borderRadius: 8, cursor: 'pointer' as any },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContentWeb: { width: 500, padding: 24, borderRadius: 16, borderWidth: 1 },
+  modalContentWeb: { maxWidth: 500, padding: 24, borderRadius: 16, borderWidth: 1 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
   textInput: { padding: 12, borderRadius: 8, fontSize: 16, borderWidth: 1 },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 24 },
@@ -814,7 +820,7 @@ const styles = StyleSheet.create({
   folderSelectItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8 },
   folderSelectItemText: { flex: 1, fontSize: 16, marginLeft: 12 },
 
-  optionsModalContent: { width: 360, padding: 20, borderRadius: 16, borderWidth: 1, gap: 8 },
+  optionsModalContent: { maxWidth: 360, padding: 20, borderRadius: 16, borderWidth: 1, gap: 8 },
   optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, gap: 12 },
   optionRowText: { fontSize: 16, fontWeight: '500' },
 

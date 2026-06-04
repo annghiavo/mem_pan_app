@@ -2,13 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, getCurrentUser } from '../../services/api';
+import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, reorderCards, getCurrentUser } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'react-native';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { showAlert } from '../../utils/alert';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView, TouchableOpacity as RNGHTouchableOpacity } from 'react-native-gesture-handler';
 
 interface Term {
   id: string;
@@ -191,13 +193,13 @@ export default function CreateModuleScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      setTerms(terms.map(t => t.id === id ? { 
-        ...t, 
-        image: { 
-          uri: asset.uri, 
-          type: asset.mimeType || 'image/jpeg', 
-          name: asset.fileName || `image_${Date.now()}.jpg` 
-        } 
+      setTerms(terms.map(t => t.id === id ? {
+        ...t,
+        image: {
+          uri: asset.uri,
+          type: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || `image_${Date.now()}.jpg`
+        }
       } : t));
     }
   };
@@ -340,6 +342,12 @@ export default function CreateModuleScreen() {
           await deleteCard(cid);
         }
 
+        // Persist drag-and-drop order for all remaining cards that have a cardId.
+        const existingCardIds = validTerms.filter(t => t.cardId).map(t => t.cardId as string);
+        if (existingCardIds.length > 0) {
+          await reorderCards(editId, existingCardIds);
+        }
+
         // Update modified existing cards.
         for (const t of validTerms) {
           if (!t.cardId) continue;
@@ -358,26 +366,33 @@ export default function CreateModuleScreen() {
           await updateCard(t.cardId, payload);
         }
 
-        // Create newly added cards.
-        const newTerms = validTerms.filter(t => !t.cardId);
-        const newWithImages = newTerms.filter(t => t.image);
-        const newWithoutImages = newTerms.filter(t => !t.image);
+        // Create newly added cards — use their index in validTerms as position
+        // so they slot into the correct spot in the ordering.
+        const newTermsWithIndex = validTerms
+          .map((t, i) => ({ t, i }))
+          .filter(({ t }) => !t.cardId);
+
+        const newWithImages = newTermsWithIndex.filter(({ t }) => !!t.image);
+        const newWithoutImages = newTermsWithIndex.filter(({ t }) => !t.image);
+
         if (newWithoutImages.length > 0) {
-          await bulkCreateCards(editId, newWithoutImages.map(t => ({
+          await bulkCreateCards(editId, newWithoutImages.map(({ t, i }) => ({
             contentFront: t.term.trim(),
             contentBack: t.definition.trim(),
             imageUrl: '',
             langFront: langCodeMap[termLang] || 'en',
             langBack: langCodeMap[defLang] || 'vi',
+            position: i,
           })));
         }
-        for (const t of newWithImages) {
+        for (const { t, i } of newWithImages) {
           await createCard(editId, {
             contentFront: t.term.trim(),
             contentBack: t.definition.trim(),
             image: t.image,
             langFront: langCodeMap[termLang] || 'en',
             langBack: langCodeMap[defLang] || 'vi',
+            position: i,
           });
         }
 
@@ -405,33 +420,53 @@ export default function CreateModuleScreen() {
       const deckId = deckRes.deck.deckId;
 
       // 2. Add Cards to Deck
-      // If any card has an image, we must use createCard individually (or bulk if supported, but here we use createCard for simplicity and reliability)
-      // For performance, we'll use bulkCreateCards for cards without images, and createCard for those with.
-      
-      const cardsWithImages = validTerms.filter(t => t.image);
-      const cardsWithoutImages = validTerms.filter(t => !t.image);
+      // bulkCreateCards sets position = array-index, so send cards without images
+      // in their original order. Cards with images are sent individually.
+      // After all cards are created, call reorderCards to enforce the exact
+      // drag-and-drop order for the full list (including image cards).
+      const cardsWithoutImages = validTerms
+        .map((t, i) => ({ t, i }))
+        .filter(({ t }) => !t.image);
+
+      const cardsWithImages = validTerms
+        .map((t, i) => ({ t, i }))
+        .filter(({ t }) => !!t.image);
+
+      // Track created card IDs indexed by their position in validTerms
+      const createdCardIds: string[] = new Array(validTerms.length).fill('');
 
       if (cardsWithoutImages.length > 0) {
-        const bulkData = cardsWithoutImages.map(t => ({
+        const bulkData = cardsWithoutImages.map(({ t }) => ({
           contentFront: t.term.trim(),
           contentBack: t.definition.trim(),
           imageUrl: '',
           langFront: langCodeMap[termLang] || 'en',
           langBack: langCodeMap[defLang] || 'vi',
         }));
-        await bulkCreateCards(deckId, bulkData);
+        const bulkRes = await bulkCreateCards(deckId, bulkData);
+        // Map returned cards back to original positions
+        const returnedCards: any[] = bulkRes?.cards || [];
+        returnedCards.forEach((card: any, idx: number) => {
+          const origIdx = cardsWithoutImages[idx]?.i;
+          if (origIdx !== undefined) createdCardIds[origIdx] = card.cardId;
+        });
       }
 
-      if (cardsWithImages.length > 0) {
-        for (const t of cardsWithImages) {
-          await createCard(deckId, {
-            contentFront: t.term.trim(),
-            contentBack: t.definition.trim(),
-            image: t.image,
-            langFront: langCodeMap[termLang] || 'en',
-            langBack: langCodeMap[defLang] || 'vi',
-          });
-        }
+      for (const { t, i } of cardsWithImages) {
+        const res = await createCard(deckId, {
+          contentFront: t.term.trim(),
+          contentBack: t.definition.trim(),
+          image: t.image,
+          langFront: langCodeMap[termLang] || 'en',
+          langBack: langCodeMap[defLang] || 'vi',
+        });
+        if (res?.card?.cardId) createdCardIds[i] = res.card.cardId;
+      }
+
+      // 3. Enforce final order with reorderCards
+      const orderedIds = createdCardIds.filter(Boolean);
+      if (orderedIds.length > 1) {
+        await reorderCards(deckId, orderedIds);
       }
 
       if (Platform.OS === 'web') {
@@ -472,95 +507,111 @@ export default function CreateModuleScreen() {
           </View>
         </WebContainer>
 
-        <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        <WebContainer>
-          {/* Info Section */}
-          <View style={styles.infoSection}>
-            <TextInput
-              style={[styles.titleInput, { color: theme.text, borderBottomColor: theme.text }]}
-              placeholder="Tiêu đề"
-              placeholderTextColor={theme.textMuted}
-              value={title}
-              onChangeText={setTitle}
-            />
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <DraggableFlatList
+            data={terms}
+            onDragEnd={({ data }) => setTerms(data)}
+            keyExtractor={(item) => item.id}
+            activationDistance={Platform.OS === 'web' ? 10 : undefined}
+            contentContainerStyle={styles.scrollContent}
+            ListHeaderComponent={
+              <WebContainer>
+                {/* Info Section */}
+                <View style={styles.infoSection}>
+                  <TextInput
+                    style={[styles.titleInput, { color: theme.text, borderBottomColor: theme.text }]}
+                    placeholder="Tiêu đề"
+                    placeholderTextColor={theme.textMuted}
+                    value={title}
+                    onChangeText={setTitle}
+                  />
 
-            {showDescription ? (
-              <TextInput
-                style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
-                placeholder="Mô tả"
-                placeholderTextColor={theme.textMuted}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-              />
-            ) : (
-              <View style={styles.infoActions}>
-                {!isEditMode && (
-                  <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
-                    <Ionicons name="document-text-outline" size={20} color={theme.primary} />
-                    <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => setShowDescription(true)}>
-                  <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.termsSection}>
-            {terms.map((term, index) => {
+                  {showDescription ? (
+                    <TextInput
+                      style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
+                      placeholder="Mô tả"
+                      placeholderTextColor={theme.textMuted}
+                      value={description}
+                      onChangeText={setDescription}
+                      multiline
+                    />
+                  ) : (
+                    <View style={styles.infoActions}>
+                      {!isEditMode && (
+                        <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
+                          <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                          <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity onPress={() => setShowDescription(true)}>
+                        <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </WebContainer>
+            }
+            ListFooterComponent={
+              <WebContainer>
+                <View style={{ height: 100 }} />
+              </WebContainer>
+            }
+            renderItem={({ item: term, drag, isActive }) => {
               const previewUri = term.image?.uri || term.imageUrl;
               return (
-                <View key={term.id} style={[styles.termCard, { backgroundColor: theme.surface }]}>
-                  <View style={styles.termCardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <TextInput
-                        style={[styles.termInput, { color: theme.text }]}
-                        placeholder="Thuật ngữ"
-                        placeholderTextColor={theme.textMuted}
-                        value={term.term}
-                        onChangeText={(val) => updateTerm(term.id, 'term', val)}
-                      />
-                      <View style={[styles.divider, { backgroundColor: theme.border }]} />
-                      <TextInput
-                        style={[styles.termInput, { color: theme.text }]}
-                        placeholder="Định nghĩa"
-                        placeholderTextColor={theme.textMuted}
-                        value={term.definition}
-                        onChangeText={(val) => updateTerm(term.id, 'definition', val)}
-                      />
-                    </View>
-                    <View style={styles.termCardActions}>
-                      {previewUri ? (
-                        <View style={styles.imagePreviewContainer}>
-                          <TouchableOpacity onPress={() => pickImage(term.id)}>
-                            <Image source={{ uri: previewUri }} style={styles.imagePreview} />
-                          </TouchableOpacity>
-                          <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
-                            <Ionicons name="close-circle" size={20} color="#ef4444" />
-                          </TouchableOpacity>
+                <ScaleDecorator>
+                  <WebContainer>
+                    <View style={[styles.termCard, { backgroundColor: theme.surface, marginBottom: 16, opacity: isActive ? 0.9 : 1, elevation: isActive ? 4 : 1 }]}>
+                      <View style={styles.termCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            style={[styles.termInput, { color: theme.text }]}
+                            placeholder="Thuật ngữ"
+                            placeholderTextColor={theme.textMuted}
+                            value={term.term}
+                            onChangeText={(val) => updateTerm(term.id, 'term', val)}
+                          />
+                          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                          <TextInput
+                            style={[styles.termInput, { color: theme.text }]}
+                            placeholder="Định nghĩa"
+                            placeholderTextColor={theme.textMuted}
+                            value={term.definition}
+                            onChangeText={(val) => updateTerm(term.id, 'definition', val)}
+                          />
                         </View>
-                      ) : (
-                        <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
-                          <Ionicons name="image-outline" size={24} color={theme.primary} />
-                        </TouchableOpacity>
-                      )}
-                      {isEditMode && terms.length > 1 && (
-                        <TouchableOpacity style={styles.deleteTermBtn} onPress={() => removeTerm(term.id)}>
-                          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                        </TouchableOpacity>
-                      )}
+                        <View style={styles.termCardActions}>
+                          <RNGHTouchableOpacity onPressIn={drag} style={[styles.dragHandleBtn, { marginBottom: 8, ...(Platform.OS === 'web' ? { cursor: 'grab' } : {}) } as any]}>
+                            <Ionicons name="menu" size={24} color={theme.textMuted} />
+                          </RNGHTouchableOpacity>
+                          {previewUri ? (
+                            <View style={styles.imagePreviewContainer}>
+                              <TouchableOpacity onPress={() => pickImage(term.id)}>
+                                <Image source={{ uri: previewUri }} style={styles.imagePreview} />
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
+                                <Ionicons name="close-circle" size={20} color="#ef4444" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
+                              <Ionicons name="image-outline" size={24} color={theme.primary} />
+                            </TouchableOpacity>
+                          )}
+                          {terms.length > 1 && (
+                            <TouchableOpacity style={styles.deleteTermBtn} onPress={() => removeTerm(term.id)}>
+                              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </View>
+                  </WebContainer>
+                </ScaleDecorator>
               );
-            })}
-          </View>
-
-          <View style={{ height: 100 }} />
-        </WebContainer>
-        </ScrollView>
+            }}
+          />
+        </GestureHandlerRootView>
 
         <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={addTerm}>
           <Ionicons name="add" size={24} color="#ffffff" />
@@ -720,6 +771,7 @@ const styles = StyleSheet.create({
   termCard: { borderRadius: 8, padding: 16, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   termCardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
   termCardActions: { marginLeft: 12, alignItems: 'center', justifyContent: 'center' },
+  dragHandleBtn: { width: 44, height: 32, justifyContent: 'center', alignItems: 'center' },
   addImageBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(66, 85, 255, 0.1)', justifyContent: 'center', alignItems: 'center' },
   deleteTermBtn: { marginTop: 8, width: 44, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   imagePreviewContainer: { position: 'relative' },

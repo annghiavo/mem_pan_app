@@ -298,6 +298,49 @@ export const getDecks = (page = 1, pageSize = 20) => {
   return request(`/decks?page=${page}&pageSize=${pageSize}`);
 };
 
+export const getAllLibraryDecks = async () => {
+  try {
+    // 1. Fetch created/cloned decks
+    const decksRes = await getDecks(1, 100);
+    const ownedDecks = (decksRes.decks || []).map((d: any) => ({
+      ...d,
+      _isOwned: true,
+      _isCloned: !!(d.clonedFrom || d.cloned_from)
+    }));
+
+    // 2. Fetch recently studied deck IDs
+    const recentRes = await getRecentDecks().catch(() => ({ decks: [] }));
+    const recentDecks = recentRes.decks || [];
+
+    // 3. Find missing deck IDs
+    const ownedDeckIds = new Set(ownedDecks.map((d: any) => d.deckId || d.deck_id));
+    const missingDeckIds = recentDecks
+      .filter((r: any) => !ownedDeckIds.has(r.deckId || r.deck_id))
+      .map((r: any) => r.deckId || r.deck_id);
+
+    // 4. Fetch missing decks
+    const fetchedDecks = await Promise.all(
+      missingDeckIds.map((id: string) => getDeck(id).catch(() => null))
+    );
+    // Extract the actual deck object from GetDeckResponse
+    const validFetchedDecks = fetchedDecks
+      .filter((res: any) => res && res.deck)
+      .map((res: any) => ({
+        ...res.deck,
+        _isOwned: false,
+        _isCloned: !!(res.deck.clonedFrom || res.deck.cloned_from)
+      }));
+
+    // 5. Merge
+    return {
+      decks: [...ownedDecks, ...validFetchedDecks],
+    };
+  } catch (error) {
+    console.error("Error in getAllLibraryDecks:", error);
+    return { decks: [] };
+  }
+};
+
 export const createDeck = (name: string, description: string, isPublic: boolean) => {
   return request('/decks', {
     method: 'POST',
@@ -416,13 +459,14 @@ export const createCard = async (deckId: string, data: {
   return handleResponse(response, 'POST', url);
 };
 
-export const bulkCreateCards = (deckId: string, cards: { contentFront: string; contentBack: string; imageUrl?: string; langFront?: string; langBack?: string }[]) => {
+export const bulkCreateCards = (deckId: string, cards: { contentFront: string; contentBack: string; imageUrl?: string; langFront?: string; langBack?: string; position?: number }[]) => {
   const formattedCards = cards.map(c => ({
     content_front: c.contentFront,
     content_back: c.contentBack,
     image_url: c.imageUrl,
     lang_front: c.langFront,
-    lang_back: c.langBack
+    lang_back: c.langBack,
+    position: c.position,
   }));
   return request(`/decks/${deckId}/cards/bulk`, {
     method: 'POST',
@@ -494,6 +538,13 @@ export const updateCard = async (cardId: string, data: {
 
 export const deleteCard = (cardId: string) => {
   return request(`/cards/${cardId}`, { method: 'DELETE' });
+};
+
+export const reorderCards = (deckId: string, cardIds: string[]) => {
+  return request(`/decks/${deckId}/cards/reorder`, {
+    method: 'PUT',
+    body: JSON.stringify({ card_ids: cardIds }),
+  });
 };
 
 // --- Folders ---

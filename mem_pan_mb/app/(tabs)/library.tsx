@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, useColorScheme, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getDecks, getFolders } from '../../services/api';
+import { getDecks, getFolders, getAllLibraryDecks } from '../../services/api';
+
+const DECK_FILTER_OPTIONS = [
+  { label: 'Tất cả', value: 'all' },
+  { label: 'Đã tạo', value: 'created' },
+];
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -11,6 +16,8 @@ export default function LibraryScreen() {
   const [folders, setFolders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deckFilter, setDeckFilter] = useState('all');
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -33,7 +40,7 @@ export default function LibraryScreen() {
   const fetchData = async () => {
     try {
       if (activeTab === 'Học phần') {
-        const res = await getDecks();
+        const res = await getAllLibraryDecks();
         setDecks(res.decks || []);
       } else if (activeTab === 'Thư mục') {
         const res = await getFolders();
@@ -60,6 +67,7 @@ export default function LibraryScreen() {
   };
 
   return (
+    <>
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <View style={styles.tabsContainer}>
@@ -97,27 +105,46 @@ export default function LibraryScreen() {
           {activeTab === 'Học phần' ? (
             <>
               <View style={styles.filterContainer}>
-                <Text style={[styles.filterText, { color: theme.textMuted }]}>Tất cả</Text>
-                <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
+                <TouchableOpacity
+                  onPress={() => setShowFilterModal(true)}
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <Text style={[styles.filterText, { color: theme.primary }]}>
+                    {DECK_FILTER_OPTIONS.find(o => o.value === deckFilter)?.label ?? 'Tất cả'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={theme.primary} />
+                </TouchableOpacity>
               </View>
-              <Text style={[styles.dateHeader, { color: theme.text }]}>Gần đây</Text>
-              {decks.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>Chưa có học phần nào</Text>
-                </View>
-              ) : (
-                decks.map((deck) => (
-                  <TouchableOpacity key={deck.deckId} style={[styles.itemCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
-                    <View style={[styles.itemIconContainer, { backgroundColor: theme.iconBg }]}>
-                      <Ionicons name="albums-outline" size={24} color={isDark ? '#38bdf8' : '#0284c7'} />
-                    </View>
-                    <View style={styles.itemInfo}>
-                      <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
-                      <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>Học phần • {deck.cardCount || 0} thuật ngữ</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
+              <Text style={[styles.dateHeader, { color: theme.textMuted, fontSize: 13 }]}>
+                {(() => {
+                  const filtered = deckFilter === 'created' ? decks.filter(d => d._isOwned && !d._isCloned) : decks;
+                  return `${filtered.length} học phần`;
+                })()}
+              </Text>
+              {(() => {
+                const filtered = deckFilter === 'created' ? decks.filter(d => d._isOwned && !d._isCloned) : decks;
+                return filtered.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                      {deckFilter === 'created' ? 'Bạn chưa tạo học phần nào' : 'Chưa có học phần nào'}
+                    </Text>
+                  </View>
+                ) : (
+                  filtered.map((deck) => (
+                    <TouchableOpacity key={deck.deckId} style={[styles.itemCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                      <View style={[styles.itemIconContainer, { backgroundColor: theme.iconBg }]}>
+                        <Ionicons name="albums-outline" size={24} color={isDark ? '#38bdf8' : '#0284c7'} />
+                      </View>
+                      <View style={styles.itemInfo}>
+                        <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                        <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>
+                          {deck._isCloned ? 'Sao chép' : (deck._isOwned ? 'Đã tạo' : 'Đã học')} • {deck.cardCount || 0} thuật ngữ
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                );
+              })()}
             </>
           ) : null}
 
@@ -147,6 +174,41 @@ export default function LibraryScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+
+    {/* Filter picker modal */}
+    <Modal
+      visible={showFilterModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowFilterModal(false)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+        activeOpacity={1}
+        onPress={() => setShowFilterModal(false)}
+      >
+        <View style={{ width: '100%', maxWidth: 320, backgroundColor: theme.surface, borderRadius: 16, overflow: 'hidden' }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, padding: 16, paddingBottom: 8 }}>Hiển thị</Text>
+          {DECK_FILTER_OPTIONS.map((opt, idx) => (
+            <TouchableOpacity
+              key={opt.value}
+              onPress={() => { setDeckFilter(opt.value); setShowFilterModal(false); }}
+              style={[
+                { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
+                idx < DECK_FILTER_OPTIONS.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
+                opt.value === deckFilter && { backgroundColor: isDark ? 'rgba(88,101,242,0.15)' : 'rgba(88,101,242,0.08)' },
+              ]}
+            >
+              <Text style={{ fontSize: 16, color: opt.value === deckFilter ? theme.primary : theme.text, fontWeight: opt.value === deckFilter ? '600' : '400' }}>
+                {opt.label}
+              </Text>
+              {opt.value === deckFilter && <Ionicons name="checkmark" size={20} color={theme.primary} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+    </>
   );
 }
 

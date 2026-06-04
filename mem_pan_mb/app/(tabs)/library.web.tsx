@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, useColorScheme } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, useColorScheme, Modal, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getDecks, getFolders } from '../../services/api';
+import { getDecks, getFolders, getAllLibraryDecks } from '../../services/api';
 
 // Web specific hoverable wrapper
 function HoverableCard({ children, style, onPress, theme }: any) {
@@ -17,14 +17,76 @@ function HoverableCard({ children, style, onPress, theme }: any) {
             onMouseLeave={() => setIsHovered(false)}
             style={[
                 style,
-                { cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
-                isHovered && { transform: [{ translateY: -2 }], boxShadow: `0 6px 12px ${theme.shadowColor}15` }
+                { cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' } as any,
+                isHovered && { transform: [{ translateY: -2 }], boxShadow: `0 6px 12px ${theme.shadowColor}15` } as any,
             ]}
         >
             {children}
         </TouchableOpacity>
     );
 }
+
+// Dropdown filter component
+function FilterDropdown({ value, options, onChange, theme }: {
+    value: string;
+    options: { label: string; value: string }[];
+    onChange: (v: string) => void;
+    theme: any;
+}) {
+    const [open, setOpen] = useState(false);
+    const selected = options.find(o => o.value === value);
+
+    return (
+        <View style={{ position: 'relative' as any, zIndex: 100 }}>
+            <TouchableOpacity
+                onPress={() => setOpen(!open)}
+                style={[
+                    styles.filterBtn,
+                    { borderColor: open ? theme.primary : theme.border, backgroundColor: theme.surface }
+                ]}
+                activeOpacity={0.8}
+            >
+                <Text style={[styles.filterBtnText, { color: open ? theme.primary : theme.text }]}>
+                    {selected?.label ?? value}
+                </Text>
+                <Ionicons
+                    name={open ? 'chevron-up' : 'chevron-down'}
+                    size={14}
+                    color={open ? theme.primary : theme.textMuted}
+                    style={{ marginLeft: 6 }}
+                />
+            </TouchableOpacity>
+
+            {open && (
+                <View style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadowColor }]}>
+                    {options.map((opt, idx) => (
+                        <TouchableOpacity
+                            key={opt.value}
+                            onPress={() => { onChange(opt.value); setOpen(false); }}
+                            style={[
+                                styles.dropdownItem,
+                                idx < options.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
+                                opt.value === value && { backgroundColor: theme.activeTabBg },
+                            ]}
+                        >
+                            <Text style={[styles.dropdownItemText, { color: opt.value === value ? theme.primary : theme.text }]}>
+                                {opt.label}
+                            </Text>
+                            {opt.value === value && (
+                                <Ionicons name="checkmark" size={16} color={theme.primary} />
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+}
+
+const DECK_FILTER_OPTIONS = [
+    { label: 'Tất cả', value: 'all' },
+    { label: 'Đã tạo', value: 'created' },
+];
 
 export default function LibraryWebScreen() {
     const router = useRouter();
@@ -33,6 +95,7 @@ export default function LibraryWebScreen() {
     const [folders, setFolders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [deckFilter, setDeckFilter] = useState('all');
 
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
@@ -56,7 +119,7 @@ export default function LibraryWebScreen() {
     const fetchData = async () => {
         try {
             if (activeTab === 'Học phần') {
-                const res = await getDecks();
+                const res = await getAllLibraryDecks();
                 setDecks(res.decks || []);
             } else if (activeTab === 'Thư mục') {
                 const res = await getFolders();
@@ -80,6 +143,11 @@ export default function LibraryWebScreen() {
         setRefreshing(true);
         fetchData();
     };
+
+    // Apply deck filter
+    const filteredDecks = deckFilter === 'created'
+        ? decks.filter(d => d._isOwned && !d._isCloned)
+        : decks;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -112,6 +180,7 @@ export default function LibraryWebScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
                 }
+                // Close dropdown when scrolling
             >
                 <View style={styles.contentWrapper}>
                     {loading ? (
@@ -120,27 +189,33 @@ export default function LibraryWebScreen() {
                         </View>
                     ) : (
                         <>
-                            {/* Content logic specific to web */}
-                            <View style={styles.filterRow}>
-                                <View style={styles.filterContainer}>
-                                    <Text style={[styles.filterText, { color: theme.textMuted }]}>Tất cả</Text>
-                                    <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
+                            {/* Filter row: only for Học phần */}
+                            {activeTab === 'Học phần' && (
+                                <View style={styles.filterRow}>
+                                    <FilterDropdown
+                                        value={deckFilter}
+                                        options={DECK_FILTER_OPTIONS}
+                                        onChange={setDeckFilter}
+                                        theme={theme}
+                                    />
+                                    <Text style={[styles.filterCount, { color: theme.textMuted }]}>
+                                        {filteredDecks.length} học phần
+                                    </Text>
                                 </View>
-                                <View style={styles.filterContainer}>
-                                    <Text style={[styles.filterText, { color: theme.textMuted }]}>Gần đây</Text>
-                                    <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
-                                </View>
-                            </View>
+                            )}
 
                             {activeTab === 'Học phần' ? (
                                 <>
-                                    {decks.length === 0 ? (
+                                    {filteredDecks.length === 0 ? (
                                         <View style={styles.emptyContainer}>
-                                            <Text style={[styles.emptyText, { color: theme.textMuted }]}>Chưa có học phần nào</Text>
+                                            <Ionicons name="albums-outline" size={48} color={theme.textMuted} style={{ marginBottom: 12 }} />
+                                            <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                                                {deckFilter === 'created' ? 'Bạn chưa tạo học phần nào' : 'Chưa có học phần nào'}
+                                            </Text>
                                         </View>
                                     ) : (
                                         <View style={styles.gridContainer}>
-                                            {decks.map((deck) => (
+                                            {filteredDecks.map((deck) => (
                                                 <HoverableCard
                                                     key={deck.deckId}
                                                     theme={theme}
@@ -152,7 +227,9 @@ export default function LibraryWebScreen() {
                                                     </View>
                                                     <View style={styles.itemInfo}>
                                                         <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
-                                                        <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>Học phần • {deck.cardCount || 0} thuật ngữ</Text>
+                                                        <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>
+                                                            {deck._isCloned ? 'Sao chép' : (deck._isOwned ? 'Đã tạo' : 'Đã học')} • {deck.cardCount || 0} thuật ngữ
+                                                        </Text>
                                                     </View>
                                                 </HoverableCard>
                                             ))}
@@ -165,6 +242,7 @@ export default function LibraryWebScreen() {
                                 <>
                                     {folders.length === 0 ? (
                                         <View style={styles.emptyContainer}>
+                                            <Ionicons name="folder-outline" size={48} color={theme.textMuted} style={{ marginBottom: 12 }} />
                                             <Text style={[styles.emptyText, { color: theme.textMuted }]}>Chưa có thư mục nào</Text>
                                         </View>
                                     ) : (
@@ -210,7 +288,7 @@ const styles = StyleSheet.create({
     },
     contentWrapper: {
         width: '100%',
-        maxWidth: 1100, // Constrain width on large displays
+        maxWidth: 1100,
         paddingHorizontal: 32,
     },
     tabsContainer: {
@@ -248,31 +326,69 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     emptyText: {
-        fontSize: 18,
+        fontSize: 16,
+        textAlign: 'center',
     },
+
+    // Filter row
     filterRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'flex-start',
         marginBottom: 24,
         gap: 16,
+        zIndex: 100,
     },
-    filterContainer: {
+    filterCount: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+
+    // Filter dropdown button
+    filterBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         paddingVertical: 8,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderWidth: 1.5,
         borderRadius: 8,
         // @ts-ignore
         cursor: 'pointer',
     },
-    filterText: {
+    filterBtnText: {
         fontSize: 14,
         fontWeight: '600',
-        marginRight: 8,
     },
+
+    // Dropdown menu
+    dropdownMenu: {
+        position: 'absolute' as any,
+        top: 44,
+        left: 0,
+        minWidth: 160,
+        borderRadius: 10,
+        borderWidth: 1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 8,
+        overflow: 'hidden',
+        zIndex: 999,
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        // @ts-ignore
+        cursor: 'pointer',
+    },
+    dropdownItemText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+
+    // Grid
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
