@@ -164,7 +164,7 @@ const extractApiMessage = (data: any, status: number): string => {
   return msg.trim();
 };
 
-const handleResponse = async (response: Response, method = 'GET', url = '') => {
+const handleResponse = async (response: Response, method = 'GET', url = '', quiet = false) => {
   const responseText = await response.text();
   let data;
   try {
@@ -180,7 +180,7 @@ const handleResponse = async (response: Response, method = 'GET', url = '') => {
     );
   }
 
-  logResponse(method, url, response.status, data);
+  if (!quiet) logResponse(method, url, response.status, data);
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -202,7 +202,7 @@ const handleResponse = async (response: Response, method = 'GET', url = '') => {
   return data;
 };
 
-const request = async (endpoint: string, options: RequestInit = {}) => {
+const request = async (endpoint: string, options: RequestInit = {}, extraOpts?: { quiet?: boolean }) => {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -219,17 +219,17 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
   const method = (options.method || 'GET').toUpperCase();
   const url = `${API_URL}${endpoint}`;
-  logRequest(method, url, options.body);
+  if (!extraOpts?.quiet) logRequest(method, url, options.body);
 
   try {
     const response = await fetch(url, {
       ...options,
       headers,
     });
-    return await handleResponse(response, method, url);
+    return await handleResponse(response, method, url, extraOpts?.quiet);
   } catch (err: any) {
-    if (LOG_API) console.error(`[API ✗] ${method} ${url}`, err?.message ?? err);
-    sendDevLog({ kind: 'error', method, url, message: String(err?.message ?? err) });
+    if (LOG_API && !extraOpts?.quiet) console.error(`[API ✗] ${method} ${url}`, err?.message ?? err);
+    if (!extraOpts?.quiet) sendDevLog({ kind: 'error', method, url, message: String(err?.message ?? err) });
     throw err;
   }
 };
@@ -318,9 +318,12 @@ export const getAllLibraryDecks = async () => {
       .filter((r: any) => !ownedDeckIds.has(r.deckId || r.deck_id))
       .map((r: any) => r.deckId || r.deck_id);
 
-    // 4. Fetch missing decks
+    // 4. Fetch missing decks — 404s are expected (deck deleted/hidden) so we
+    //    use a quiet helper that suppresses the noisy error logs for them.
     const fetchedDecks = await Promise.all(
-      missingDeckIds.map((id: string) => getDeck(id).catch(() => null))
+      missingDeckIds.map((id: string) =>
+        request(`/decks/${id}`, {}, { quiet: true }).catch(() => null)
+      )
     );
     // Extract the actual deck object from GetDeckResponse
     const validFetchedDecks = fetchedDecks

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { getCurrentUser, logoutUser, getRefreshToken, clearAuth, changePassword, uploadAvatar, registerDeviceToken, unregisterDeviceToken, sendTestNotification } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
+import appJson from '../../app.json';
 import { showAlert, showConfirm } from '../../utils/alert';
 
 // Firebase messaging is not available on web
@@ -398,7 +399,7 @@ export default function SettingsScreen() {
 
             <View style={styles.versionContainer}>
               <Text style={[styles.logoText, { color: theme.primary }]}>Mem Pan</Text>
-              <Text style={[styles.versionText, { color: theme.textMuted }]}>v1.0.2</Text>
+              <Text style={[styles.versionText, { color: theme.textMuted }]}>v{appJson.expo.version}</Text>
             </View>
           </WebContainer>
         </ScrollView>

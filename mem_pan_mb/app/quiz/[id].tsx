@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, useColorScheme, Image, TextInput, KeyboardAvoidingView, Platform,
+  Keyboard, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -13,6 +14,7 @@ import { StudySettings, defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
 import { checkWrittenAnswer } from '../../utils/learningLogic';
 import { WebContainer } from '../../components/ui/WebContainer';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 const langNameMap: Record<string, string> = {
   vi: 'Tiếng Việt',
@@ -172,6 +174,7 @@ export default function QuizScreen() {
     : filterStateParam === 'studying' ? 'Đang học'
       : filterStateParam === 'memorized' ? 'Thành thạo' : '';
 
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -233,6 +236,10 @@ export default function QuizScreen() {
   const [isAnswered, setIsAnswered] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [cardStartTime, setCardStartTime] = useState(Date.now());
+
+  const writtenInputRef = useRef<TextInput>(null);
+  // Drives the "Không biết" collapse animation: 1 = visible, 0 = hidden
+  const dontKnowAnim = useRef(new Animated.Value(1)).current;
 
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The server stores one review per (sessionId, cardId). With both MC and
@@ -453,6 +460,7 @@ export default function QuizScreen() {
 
   const handleSubmitWritten = async () => {
     if (isAnswered || !writtenInput.trim()) return;
+    Keyboard.dismiss();
     const correct = checkWrittenAnswer(writtenInput, currentQuestion.correctAnswer, settings.strictnessLevel);
     setIsAnswered(true);
     setIsCorrect(correct);
@@ -466,6 +474,17 @@ export default function QuizScreen() {
       setRoundWrong(prev => prev + 1);
     }
     await submitReview(correct);
+  };
+
+  const handleDontKnow = async () => {
+    if (isAnswered) return;
+    Keyboard.dismiss();
+    setWrittenInput('');
+    setIsAnswered(true);
+    setIsCorrect(false);
+    setWrongInRound(prev => [...prev, currentQuestion.key]);
+    setRoundWrong(prev => prev + 1);
+    await submitReview(false);
   };
 
   // ─── Guards ───────────────────────────────────────────────────────────────
@@ -567,23 +586,12 @@ export default function QuizScreen() {
 
   // ─── Footer ───────────────────────────────────────────────────────────────
 
-  const showFooter =
-    (isWritten && !isAnswered) ||
-    isRetypeMode ||
-    (isMC && isAnswered && !isCorrect);
+  // showFooter: controls the old-style full-width button footer (MC wrong + retype mode).
+  // Written unanswered state now uses the inline input bar instead.
+  const showFooter = isRetypeMode || (isMC && isAnswered && !isCorrect);
 
   let footerNode: React.ReactNode = null;
-  if (isWritten && !isAnswered) {
-    footerNode = (
-      <TouchableOpacity
-        style={[styles.actionButton, !writtenInput.trim() && { opacity: 0.4 }]}
-        onPress={handleSubmitWritten}
-        disabled={!writtenInput.trim()}
-      >
-        <Text style={styles.actionButtonText}>Kiểm tra</Text>
-      </TouchableOpacity>
-    );
-  } else if (isRetypeMode) {
+  if (isRetypeMode) {
     footerNode = (
       <TouchableOpacity
         style={[styles.actionButton, !retypeMatches && { opacity: 0.4 }]}
@@ -600,6 +608,9 @@ export default function QuizScreen() {
       </TouchableOpacity>
     );
   }
+
+  // Written answer: show inline input bar docked above the keyboard
+  const showWrittenInputBar = isWritten && !isAnswered;
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -644,7 +655,7 @@ export default function QuizScreen() {
         </View>
       </WebContainer>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <WebContainer maxWidth={900} paddingHorizontal={0}>
           {/* Badge */}
@@ -712,37 +723,32 @@ export default function QuizScreen() {
             </View>
           )}
 
-          {/* ── Written input / result ── */}
-          {isWritten && (
+          {/* ── Written result (shown after answering) ── */}
+          {isWritten && isAnswered && (
             <View>
-              {!isAnswered ? (
-                <TextInput
-                  style={[
-                    styles.writtenInput,
-                    { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text },
-                  ]}
-                  placeholder="Nhập câu trả lời..."
-                  placeholderTextColor={theme.textMuted}
-                  value={writtenInput}
-                  onChangeText={setWrittenInput}
-                  multiline
-                  autoFocus
-                />
-              ) : isCorrect ? (
+              {isCorrect ? (
                 <View style={[styles.resultBox, { backgroundColor: theme.correctBg, borderColor: theme.correctBorder }]}>
                   <Text style={[styles.resultLabel, { color: theme.correctText }]}>✓ Đúng rồi!</Text>
                   <Text style={[styles.resultAnswer, { color: theme.correctText }]}>{writtenInput}</Text>
                 </View>
               ) : (
                 <View style={styles.retypeBlock}>
-                  <View style={[styles.yourAnswerBox, { backgroundColor: theme.incorrectBg, borderColor: theme.incorrectBorder }]}>
-                    <Text style={[styles.yourAnswerLabel, { color: theme.incorrectText }]}>
-                      Câu trả lời của bạn:
-                    </Text>
-                    <Text style={[styles.yourAnswerText, { color: theme.incorrectText }]}>
-                      {writtenInput}
-                    </Text>
-                  </View>
+                  {writtenInput ? (
+                    <View style={[styles.yourAnswerBox, { backgroundColor: theme.incorrectBg, borderColor: theme.incorrectBorder }]}>
+                      <Text style={[styles.yourAnswerLabel, { color: theme.incorrectText }]}>
+                        Câu trả lời của bạn:
+                      </Text>
+                      <Text style={[styles.yourAnswerText, { color: theme.incorrectText }]}>
+                        {writtenInput}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.yourAnswerBox, { backgroundColor: theme.incorrectBg, borderColor: theme.incorrectBorder }]}>
+                      <Text style={[styles.yourAnswerLabel, { color: theme.incorrectText }]}>
+                        Bạn đã bỏ qua câu này
+                      </Text>
+                    </View>
+                  )}
                   <View style={[styles.correctAnswerBox, { backgroundColor: theme.correctBg, borderColor: theme.correctBorder }]}>
                     <Text style={[styles.correctAnswerLabel, { color: theme.correctText }]}>
                       Đáp án đúng:
@@ -767,7 +773,10 @@ export default function QuizScreen() {
                     placeholderTextColor={theme.textMuted}
                     value={retypeInput}
                     onChangeText={setRetypeInput}
-                    multiline
+                    onSubmitEditing={() => {
+                      if (retypeMatches) advanceToNext();
+                    }}
+                    returnKeyType="done"
                     autoFocus
                   />
                 </View>
@@ -777,7 +786,63 @@ export default function QuizScreen() {
           </WebContainer>
         </ScrollView>
 
-        {/* Footer */}
+        {/* Written input bar — docked above keyboard */}
+        {showWrittenInputBar && (
+          <View style={[styles.inputBar, { 
+            backgroundColor: theme.surface, 
+            borderTopColor: theme.border,
+            paddingBottom: Math.max(insets.bottom, 12) 
+          }]}>
+            <TextInput
+              ref={writtenInputRef}
+              style={[styles.inputBarField, { backgroundColor: isDark ? '#27272a' : '#f3f4f6', color: theme.text }]}
+              placeholder="Nhập đáp án"
+              placeholderTextColor={theme.textMuted}
+              value={writtenInput}
+              onChangeText={(text) => {
+                setWrittenInput(text);
+                // Animate "Không biết" out when user starts typing, in when empty
+                Animated.timing(dontKnowAnim, {
+                  toValue: text.trim() ? 0 : 1,
+                  duration: 180,
+                  useNativeDriver: false,
+                }).start();
+              }}
+              onSubmitEditing={handleSubmitWritten}
+              returnKeyType="done"
+              autoFocus
+            />
+            {/* "Không biết" fades + collapses when user types */}
+            <Animated.View style={{
+              opacity: dontKnowAnim,
+              width: dontKnowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 90] }),
+              overflow: 'hidden',
+            }}>
+              <TouchableOpacity
+                style={styles.dontKnowButton}
+                onPress={handleDontKnow}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.dontKnowText} numberOfLines={1}>Không biết</Text>
+              </TouchableOpacity>
+            </Animated.View>
+            <TouchableOpacity
+              style={[
+                styles.submitCircle,
+                writtenInput.trim()
+                  ? { opacity: 1, backgroundColor: '#5865F2' }
+                  : { opacity: 0.35, backgroundColor: '#5865F2' },
+              ]}
+              onPress={handleSubmitWritten}
+              disabled={!writtenInput.trim()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-up" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Footer (MC wrong / retype) */}
         {showFooter && footerNode ? (
           <WebContainer maxWidth={900} paddingHorizontal={0}>
             <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.borderLight }]}>
@@ -834,6 +899,40 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
     marginBottom: 12,
+  },
+  // ── Bottom input bar (written questions) ──
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  inputBarField: {
+    flex: 1,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 16,
+    minHeight: 44,
+  },
+  dontKnowButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dontKnowText: {
+    color: '#5865F2',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  submitCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#5865F2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   resultBox: {
     borderWidth: 2,

@@ -381,6 +381,7 @@ export default function PracticeTestScreen() {
                 placeholderTextColor={theme.textMuted}
                 editable={!hasAnsweredCurrent}
                 onSubmitEditing={() => handleAnswer(currentAnswerText)}
+                returnKeyType="done"
               />
               {!hasAnsweredCurrent ? (
                 <TouchableOpacity style={styles.submitBtn} onPress={() => handleAnswer(currentAnswerText)}>

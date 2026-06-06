@@ -127,7 +127,7 @@ export default function LoginScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <WebContainer maxWidth={480} paddingHorizontal={0}>
           <View style={styles.header} />
@@ -155,6 +155,12 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                onSubmitEditing={() => {
+                  if (isFormValid && !loading) {
+                    handleLogin();
+                  }
+                }}
+                returnKeyType="done"
               />
               <TouchableOpacity
                 style={styles.eyeIcon}
@@ -197,37 +203,45 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
       {/* Forgot Password Modal */}
       <Modal visible={showForgotModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: theme.background }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Quên mật khẩu</Text>
-            <Text style={[styles.modalSubtitle, { color: theme.textMuted }]}>
-              Nhập email để nhận liên kết đặt lại mật khẩu.
-            </Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Email của bạn"
-                placeholderTextColor={theme.textMuted}
-                value={forgotEmail}
-                onChangeText={setForgotEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior="padding"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { backgroundColor: theme.background }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Quên mật khẩu</Text>
+              <Text style={[styles.modalSubtitle, { color: theme.textMuted }]}>
+                Nhập email để nhận liên kết đặt lại mật khẩu.
+              </Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme.inputBg }]}>
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  placeholder="Email của bạn"
+                  placeholderTextColor={theme.textMuted}
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
+                  onSubmitEditing={handleForgotPassword}
+                  returnKeyType="send"
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.loginButton, { marginTop: 12 }]}
+                onPress={handleForgotPassword}
+                disabled={sendingReset}
+              >
+                {sendingReset
+                  ? <ActivityIndicator color="#ffffff" />
+                  : <Text style={styles.loginButtonText}>Gửi liên kết</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => { setShowForgotModal(false); setForgotEmail(''); }}>
+                <Text style={[styles.forgotPasswordText, { color: theme.textMuted }]}>Hủy</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.loginButton, { marginTop: 12 }]}
-              onPress={handleForgotPassword}
-              disabled={sendingReset}
-            >
-              {sendingReset
-                ? <ActivityIndicator color="#ffffff" />
-                : <Text style={styles.loginButtonText}>Gửi liên kết</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => { setShowForgotModal(false); setForgotEmail(''); }}>
-              <Text style={[styles.forgotPasswordText, { color: theme.textMuted }]}>Hủy</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
