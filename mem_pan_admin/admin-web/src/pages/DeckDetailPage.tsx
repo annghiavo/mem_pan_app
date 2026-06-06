@@ -10,7 +10,6 @@ interface LocationState {
 
 const STATUS_COLORS: Record<DeckStatus, { bg: string; text: string }> = {
   active: { bg: "rgba(16, 185, 129, 0.15)", text: "hsl(150, 60%, 45%)" },
-  hidden: { bg: "rgba(245, 158, 11, 0.15)", text: "hsl(40, 90%, 55%)" },
   deleted: { bg: "rgba(220,38,38,0.15)", text: "hsl(0, 80%, 65%)" },
 };
 
@@ -29,7 +28,6 @@ export default function DeckDetailPage() {
       const statuses: (DeckStatus | undefined)[] = [
         undefined,
         "active",
-        "hidden",
         "deleted",
       ];
       for (const statusFilter of statuses) {
@@ -49,7 +47,7 @@ export default function DeckDetailPage() {
   });
 
   const deck = passedDeck ?? scannedDeck ?? undefined;
-  const initialStatus: DeckStatus = deck?.status ?? "hidden";
+  const initialStatus: DeckStatus = deck?.status ?? "active";
 
   const [status, setStatus] = useState<DeckStatus>(initialStatus);
   const [reason, setReason] = useState("");
@@ -68,7 +66,7 @@ export default function DeckDetailPage() {
   });
 
   const noChange = deck ? status === deck.status : false;
-  const statusColor = deck ? STATUS_COLORS[deck.status] : null;
+  const statusColor = deck ? (STATUS_COLORS[deck.status] || { bg: "rgba(255,255,255,0.1)", text: "var(--text-main)" }) : null;
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: 720 }}>
@@ -236,7 +234,6 @@ export default function DeckDetailPage() {
             <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value as DeckStatus)} style={{ width: "100%" }}>
               <option value="active">Active</option>
-              <option value="hidden">Hidden</option>
               <option value="deleted">Deleted</option>
             </select>
           </div>

@@ -12,7 +12,7 @@ import {
 } from '../../services/api';
 import { StudySettings, defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
-import { checkWrittenAnswer } from '../../utils/learningLogic';
+import { checkWrittenAnswer, pickRandom, shuffleArray } from '../../utils/learningLogic';
 import { WebContainer } from '../../components/ui/WebContainer';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -117,12 +117,9 @@ function buildRoundQuestions(
     const correctAnswer = direction === 'front-to-back' ? card.contentBack : card.contentFront;
 
     if (type === 'mc') {
-      const others = allCards.filter((c: any) => c.cardId !== cardId);
-      const wrong = [...others]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3)
-        .map((c: any) => direction === 'front-to-back' ? c.contentBack : c.contentFront);
-      const opts = [correctAnswer, ...wrong].sort(() => Math.random() - 0.5);
+      const wrongCards = pickRandom(allCards, 3, (c: any) => c.cardId === cardId);
+      const wrong = wrongCards.map((c: any) => direction === 'front-to-back' ? c.contentBack : c.contentFront);
+      const opts = shuffleArray([correctAnswer, ...wrong]);
       list.push({
         key,
         cardId,
@@ -312,14 +309,14 @@ export default function QuizScreen() {
         const tag = progressRes?.tags?.find((t: any) => t.label === tagLabel);
         const ids = new Set<string>(tag?.cardIds ?? []);
         let filtered = cards.filter((c: any) => ids.has(c.cardId));
-        if (loadedSettings.shuffleTerms) filtered.sort(() => Math.random() - 0.5);
+        if (loadedSettings.shuffleTerms) filtered = shuffleArray(filtered);
         cardIds = filtered.map((c: any) => c.cardId);
       } else {
-        const sessionRes = await startStudySession(deckId, 10, 20);
+        const sessionRes = await startStudySession(deckId, 999, 999);
         sessionIdRef.current = sessionRes.session?.sessionId ?? null;
         const rawCards = sessionRes.session?.cards ?? [];
         const shuffled = loadedSettings.shuffleTerms
-          ? [...rawCards].sort(() => Math.random() - 0.5)
+          ? shuffleArray([...rawCards])
           : rawCards;
         cardIds = shuffled.map((c: any) => c.cardId);
       }
@@ -329,7 +326,7 @@ export default function QuizScreen() {
       // Expand each card into one question per enabled type (MC + Written → 2 questions/card).
       let allKeys = expandCardsToKeys(cardIds, loadedSettings);
       if (loadedSettings.shuffleTerms) {
-        allKeys = [...allKeys].sort(() => Math.random() - 0.5);
+        allKeys = shuffleArray([...allKeys]);
       }
       setTotalQuestions(allKeys.length);
       setCorrectTotal(0);
@@ -373,7 +370,7 @@ export default function QuizScreen() {
   const currentQuestion = currentBatch[batchIndex];
   const isMC = currentQuestion?.type === 'mc';
   const isWritten = currentQuestion?.type === 'written';
-  const isRetypeMode = isAnswered && !isCorrect && isWritten;
+  const isRetypeMode = isAnswered && !isCorrect && isWritten && settings.requireRetypingCorrectAnswer;
   const retypeMatches =
     retypeInput.trim().toLowerCase() === currentQuestion?.correctAnswer.trim().toLowerCase();
 
@@ -405,6 +402,58 @@ export default function QuizScreen() {
   };
   const advanceToNextRef = useRef(advanceToNext);
   advanceToNextRef.current = advanceToNext;
+
+  // Keep refs for keyboard-listener so it never reads stale closure values.
+  const isAnsweredRef = useRef(isAnswered);
+  isAnsweredRef.current = isAnswered;
+  const isCorrectRef = useRef(isCorrect);
+  isCorrectRef.current = isCorrect;
+  const isRetypeModeRef = useRef(isRetypeMode);
+  isRetypeModeRef.current = isRetypeMode;
+  const retypeMatchesRef = useRef(retypeMatches);
+  retypeMatchesRef.current = retypeMatches;
+  const showWrittenInputBarRef = useRef(false);
+  // (will be set below after showWrittenInputBar is computed – but we also
+  //  compute it inline here so the ref is always up-to-date for the listener)
+  showWrittenInputBarRef.current = currentQuestion?.type === 'written' && !isAnswered;
+
+  const isMCRef = useRef(isMC);
+  isMCRef.current = isMC;
+  const optionsCountRef = useRef(currentQuestion?.options?.length ?? 0);
+  optionsCountRef.current = currentQuestion?.options?.length ?? 0;
+  const handleSelectMCRef = useRef<(index: number) => void>(() => {});
+
+  // Allow pressing Enter to advance after answering, and 1–4 to pick MC options (web only).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ── MC shortcuts: keys 1–4 ──
+      if (['1', '2', '3', '4'].includes(e.key)) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (isMCRef.current && !isAnsweredRef.current && idx < optionsCountRef.current) {
+          handleSelectMCRef.current(idx);
+        }
+        return;
+      }
+
+      // ── Enter to advance ──
+      if (e.key !== 'Enter') return;
+      // Don't intercept Enter when the written input bar is active (it submits the answer).
+      if (showWrittenInputBarRef.current) return;
+      if (!isAnsweredRef.current) return;
+
+      // Retype mode: only advance when the retype input matches.
+      if (isRetypeModeRef.current) {
+        if (retypeMatchesRef.current) advanceToNextRef.current();
+        return;
+      }
+
+      // Correct or wrong (non-retype): advance immediately.
+      advanceToNextRef.current();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const scheduleAutoAdvance = () => {
     if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
@@ -457,6 +506,7 @@ export default function QuizScreen() {
     }
     await submitReview(correct);
   };
+  handleSelectMCRef.current = handleSelectMC;
 
   const handleSubmitWritten = async () => {
     if (isAnswered || !writtenInput.trim()) return;
@@ -588,7 +638,7 @@ export default function QuizScreen() {
 
   // showFooter: controls the old-style full-width button footer (MC wrong + retype mode).
   // Written unanswered state now uses the inline input bar instead.
-  const showFooter = isRetypeMode || (isMC && isAnswered && !isCorrect);
+  const showFooter = isRetypeMode || (isWritten && isAnswered && !isCorrect && !settings.requireRetypingCorrectAnswer) || (isMC && isAnswered && !isCorrect);
 
   let footerNode: React.ReactNode = null;
   if (isRetypeMode) {
@@ -601,7 +651,7 @@ export default function QuizScreen() {
         <Text style={styles.actionButtonText}>Tiếp tục</Text>
       </TouchableOpacity>
     );
-  } else if (isMC && isAnswered && !isCorrect) {
+  } else if ((isMC || isWritten) && isAnswered && !isCorrect) {
     footerNode = (
       <TouchableOpacity style={styles.actionButton} onPress={advanceToNext}>
         <Text style={styles.actionButtonText}>Tiếp tục</Text>
@@ -757,28 +807,32 @@ export default function QuizScreen() {
                       {currentQuestion.correctAnswer}
                     </Text>
                   </View>
-                  <Text style={[styles.retypeLabel, { color: theme.textMuted }]}>
-                    Gõ lại đáp án đúng để tiếp tục:
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.writtenInput,
-                      {
-                        backgroundColor: theme.surface,
-                        borderColor: retypeMatches ? theme.correctBorder : theme.border,
-                        color: theme.text,
-                      },
-                    ]}
-                    placeholder="Gõ lại đáp án đúng..."
-                    placeholderTextColor={theme.textMuted}
-                    value={retypeInput}
-                    onChangeText={setRetypeInput}
-                    onSubmitEditing={() => {
-                      if (retypeMatches) advanceToNext();
-                    }}
-                    returnKeyType="done"
-                    autoFocus
-                  />
+                  {isRetypeMode && (
+                    <>
+                      <Text style={[styles.retypeLabel, { color: theme.textMuted }]}>
+                        Gõ lại đáp án đúng để tiếp tục:
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.writtenInput,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: retypeMatches ? theme.correctBorder : theme.border,
+                            color: theme.text,
+                          },
+                        ]}
+                        placeholder="Gõ lại đáp án đúng..."
+                        placeholderTextColor={theme.textMuted}
+                        value={retypeInput}
+                        onChangeText={setRetypeInput}
+                        onSubmitEditing={() => {
+                          if (retypeMatches) advanceToNext();
+                        }}
+                        returnKeyType="done"
+                        autoFocus
+                      />
+                    </>
+                  )}
                 </View>
               )}
             </View>
@@ -786,13 +840,17 @@ export default function QuizScreen() {
           </WebContainer>
         </ScrollView>
 
-        {/* Written input bar — docked above keyboard */}
+        {/* Written input bar — docked above keyboard (mobile) / floating higher (web) */}
         {showWrittenInputBar && (
-          <View style={[styles.inputBar, { 
-            backgroundColor: theme.surface, 
-            borderTopColor: theme.border,
-            paddingBottom: Math.max(insets.bottom, 12) 
-          }]}>
+          <View style={[
+            styles.inputBar,
+            {
+              backgroundColor: theme.surface,
+              borderTopColor: theme.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+            },
+            Platform.OS === 'web' && styles.inputBarWeb,
+          ]}>
             <TextInput
               ref={writtenInputRef}
               style={[styles.inputBarField, { backgroundColor: isDark ? '#27272a' : '#f3f4f6', color: theme.text }]}
@@ -908,6 +966,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     gap: 8,
+  },
+  inputBarWeb: {
+    position: 'absolute' as any,
+    bottom: '25%' as any,
+    maxWidth: 900,
+    width: '100%' as any,
+    alignSelf: 'center' as any,
+    // @ts-ignore – web-only
+    marginHorizontal: 'auto',
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderTopWidth: 0,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
   },
   inputBarField: {
     flex: 1,

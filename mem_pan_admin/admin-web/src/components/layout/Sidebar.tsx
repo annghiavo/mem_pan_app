@@ -27,32 +27,51 @@ export default function Sidebar() {
   const visibleLinks = LINKS.filter((l) => !l.adminOnly || role === "admin");
 
   return (
-    <aside style={{
-      width: 250,
-      background: "var(--bg-surface)",
-      borderRight: "1px solid var(--border-color)",
+    <aside className="glass-panel" style={{
+      width: 280,
+      margin: "1rem 0 1rem 1rem",
+      borderRadius: "var(--radius-lg)",
       display: "flex",
       flexDirection: "column",
+      border: "1px solid var(--border-color)",
+      position: "relative",
+      overflow: "hidden",
     }}>
+      {/* Decorative glow inside sidebar */}
+      <div style={{
+        position: "absolute",
+        top: -50,
+        left: -50,
+        width: 150,
+        height: 150,
+        background: "var(--accent-glow)",
+        filter: "blur(50px)",
+        borderRadius: "50%",
+        pointerEvents: "none"
+      }} />
       <div style={{ padding: "1.5rem", borderBottom: "1px solid var(--border-color)" }}>
         <h2 style={{
-          fontSize: "1.25rem",
+          fontSize: "1.35rem",
           fontWeight: 700,
           color: "var(--text-main)",
           display: "flex",
           alignItems: "center",
-          gap: "0.5rem",
+          gap: "0.75rem",
+          letterSpacing: "-0.02em"
         }}>
           <div style={{
-            width: 32,
-            height: 32,
-            borderRadius: "8px",
-            background: "linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover))",
+            width: 36,
+            height: 36,
+            borderRadius: "10px",
+            background: "linear-gradient(135deg, var(--accent-primary), hsl(var(--primary-hue), 80%, 55%))",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: "white",
-            fontWeight: "bold",
+            fontWeight: 800,
+            fontSize: "1.2rem",
+            boxShadow: "var(--glow-primary)",
+            textShadow: "0 2px 4px rgba(0,0,0,0.3)"
           }}>
             M
           </div>
@@ -77,25 +96,29 @@ export default function Sidebar() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.625rem 0.875rem",
+                gap: "0.875rem",
+                padding: "0.75rem 1rem",
                 borderRadius: "var(--radius-md)",
                 color: isActive ? "white" : "var(--text-muted)",
-                background: isActive ? "var(--accent-primary)" : "transparent",
+                background: isActive ? "linear-gradient(90deg, rgba(255,255,255,0.08), transparent)" : "transparent",
+                borderLeft: isActive ? "3px solid var(--accent-primary)" : "3px solid transparent",
                 fontWeight: isActive ? 600 : 500,
-                fontSize: "0.875rem",
-                transition: "all var(--transition-fast)",
+                fontSize: "0.95rem",
+                transition: "all var(--transition-normal)",
+                textShadow: isActive ? "0 0 10px rgba(255,255,255,0.3)" : "none",
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.color = "var(--text-main)";
                   e.currentTarget.style.background = "var(--bg-surface-hover)";
+                  e.currentTarget.style.transform = "translateX(4px)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.color = "var(--text-muted)";
                   e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.transform = "translateX(0)";
                 }
               }}
             >

@@ -70,7 +70,7 @@ export function getAnswerText(card: Card, answerSide: 'front' | 'back'): string 
 export function distributeQuestionTypes(
   count: number,
   enabledTypes: { multipleChoice: boolean; trueFalse: boolean; written: boolean },
-  shuffleFn: (arr: string[]) => string[] = defaultShuffle,
+  shuffleFn: (arr: string[]) => string[] = shuffleArray,
 ): string[] {
   const available: string[] = [];
   if (enabledTypes.multipleChoice) available.push('mc');
@@ -93,13 +93,11 @@ export function buildMCQuestion(
   card: Card,
   allCards: Card[],
   answerSide: 'front' | 'back',
-  shuffleFn: <T>(arr: T[]) => T[] = defaultShuffle,
+  shuffleFn: <T>(arr: T[]) => T[] = shuffleArray,
 ): MCQuestion {
   const correctAnswer = getAnswerText(card, answerSide);
-  const otherCards = allCards.filter(c => c.cardId !== card.cardId);
-  const wrongAnswers = shuffleFn([...otherCards])
-    .slice(0, 3)
-    .map(c => getAnswerText(c, answerSide));
+  const wrongCards = pickRandom(allCards, 3, c => c.cardId === card.cardId);
+  const wrongAnswers = wrongCards.map(c => getAnswerText(c, answerSide));
   const options = shuffleFn([correctAnswer, ...wrongAnswers]);
 
   return {
@@ -160,7 +158,7 @@ export function generateQuestions(
   numQuestions: number,
   enabledTypes: { multipleChoice: boolean; trueFalse: boolean; written: boolean },
   answerSide: 'front' | 'back',
-  shuffleFn: <T>(arr: T[]) => T[] = defaultShuffle,
+  shuffleFn: <T>(arr: T[]) => T[] = shuffleArray,
 ): Question[] {
   if (cards.length === 0) return [];
 
@@ -313,8 +311,33 @@ export function computeProgressPercent(memorizedCount: number, totalCount: numbe
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
-function defaultShuffle<T>(arr: T[]): T[] {
+/**
+ * Pick `count` random items from `arr`, skipping items where `excludeFn(item)`
+ * returns true.  O(count) average time vs O(N log N) for shuffle-and-slice.
+ * Falls back gracefully when fewer than `count` eligible items exist.
+ */
+export function pickRandom<T>(arr: T[], count: number, excludeFn: (item: T) => boolean): T[] {
+  const result: T[] = [];
+  if (arr.length === 0 || count <= 0) return result;
+  const used = new Set<number>();
+  let attempts = 0;
+  const maxAttempts = count * 10; // safety net for small eligible pools
+  while (result.length < count && attempts < maxAttempts && used.size < arr.length) {
+    attempts++;
+    const idx = Math.floor(Math.random() * arr.length);
+    if (!used.has(idx) && !excludeFn(arr[idx])) {
+      used.add(idx);
+      result.push(arr[idx]);
+    }
+  }
+  return result;
+}
+
+export function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
-  copy.sort(() => Math.random() - 0.5);
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
   return copy;
 }

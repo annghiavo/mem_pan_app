@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getDeckCards, getDeckStudySettings } from '../../services/api';
-import { checkAnswer } from '../../utils/learningLogic';
+import { checkAnswer, pickRandom, shuffleArray } from '../../utils/learningLogic';
 import { defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
 import { WebContainer } from '../../components/ui/WebContainer';
@@ -85,7 +85,7 @@ export default function PracticeTestScreen() {
           return;
         }
 
-        const shuffled = [...cards].sort(() => Math.random() - 0.5);
+        const shuffled = shuffleArray([...cards]);
         const actualCount = Math.max(2, Math.min(numQuestions, cards.length));
         const selectedCards = shuffled.slice(0, actualCount);
 
@@ -102,7 +102,7 @@ export default function PracticeTestScreen() {
           typeAssignments.push(availableTypes[i % availableTypes.length]);
         }
         // Shuffle the assignments so same types aren't grouped together
-        typeAssignments.sort(() => Math.random() - 0.5);
+        const shuffledAssignments = shuffleArray(typeAssignments);
 
         // Determine question/answer sides based on answerSide param
         // answerSide='back' means answer with contentBack (question shows contentFront)
@@ -111,13 +111,13 @@ export default function PracticeTestScreen() {
         const getAnswer = (card: any) => answerSide === 'front' ? card.contentFront : card.contentBack;
 
         const generated = selectedCards.map((card, idx) => {
-          const qType = typeAssignments[idx];
+          const qType = shuffledAssignments[idx];
 
           if (qType === 'mc') {
-            const otherCards = cards.filter((c: any) => c.cardId !== card.cardId);
-            const wrongAnswers = [...otherCards].sort(() => Math.random() - 0.5).slice(0, 3).map((c: any) => getAnswer(c));
+            const wrongCards = pickRandom(cards, 3, (c: any) => c.cardId === card.cardId);
+            const wrongAnswers = wrongCards.map((c: any) => getAnswer(c));
             const correctAnswer = getAnswer(card);
-            const options = [correctAnswer, ...wrongAnswers].sort(() => Math.random() - 0.5);
+            const options = shuffleArray([correctAnswer, ...wrongAnswers]);
             return { type: 'mc', card, questionText: getQuestion(card), correctAnswer, options };
           } else if (qType === 'tf') {
             const isTrue = Math.random() > 0.5;

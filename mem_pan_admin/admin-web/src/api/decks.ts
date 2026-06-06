@@ -1,6 +1,6 @@
 import { adminApi } from "./client";
 
-export type DeckStatus = "active" | "hidden" | "deleted";
+export type DeckStatus = "active" | "deleted";
 
 export interface Deck {
   deckId: string;

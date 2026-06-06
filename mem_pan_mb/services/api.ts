@@ -77,12 +77,17 @@ if (LOG_API) {
   }
 }
 
-const redact = (data: any): any => {
-  if (!data || typeof data !== 'object') return data;
-  if (Array.isArray(data)) return data.map(redact);
+const redact = (data: any, depth = 0): any => {
+  if (!data || typeof data !== 'object' || depth > 5) return data;
+  if (Array.isArray(data)) {
+    if (data.length > 5) {
+      return [...data.slice(0, 5).map(item => redact(item, depth + 1)), `... (${data.length - 5} more items)`];
+    }
+    return data.map(item => redact(item, depth + 1));
+  }
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(data)) {
-    out[k] = /password|token|secret|authorization/i.test(k) ? '***' : redact(v);
+    out[k] = /password|token|secret|authorization/i.test(k) ? '***' : redact(v, depth + 1);
   }
   return out;
 };
@@ -110,12 +115,13 @@ export const logResponse = (method: string, url: string, status: number, data: a
   const startedAt = requestStartedAt.get(reqKey(method, url));
   const durationMs = startedAt ? Date.now() - startedAt : undefined;
   if (startedAt) requestStartedAt.delete(reqKey(method, url));
+  const safeData = redact(data);
   if (status >= 400) {
-    console.warn(`[API ✗] ${status} ${method} ${url}`, data);
+    console.warn(`[API ✗] ${status} ${method} ${url}`, safeData);
   } else {
-    console.log(`[API ←] ${status} ${method} ${url}`, data);
+    console.log(`[API ←] ${status} ${method} ${url}`, safeData);
   }
-  sendDevLog({ kind: 'response', method, url, status, data, durationMs });
+  sendDevLog({ kind: 'response', method, url, status, data: safeData, durationMs });
 };
 
 export const setAuthToken = async (token: string) => {

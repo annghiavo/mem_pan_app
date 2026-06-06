@@ -8,7 +8,6 @@ import { AlertCircle, Layers, Search } from "lucide-react";
 const STATUS_FILTERS: { key: "all" | DeckStatus; label: string }[] = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
-  { key: "hidden", label: "Hidden" },
   { key: "deleted", label: "Deleted" },
 ];
 

@@ -38,11 +38,9 @@ export default function LoginPage() {
         return;
       }
 
-      // Check the role from the response body
       const role = extractUserRole(data) || "unknown";
 
       if (role !== "admin") {
-        // Not an admin — notify and do NOT store the token
         setMessage({
           type: "warning",
           text: `Access denied. Your account role is "${role}". Only admin accounts can access this panel.`,
@@ -51,7 +49,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Admin role confirmed — store token & role, then navigate
       setToken(accessToken);
       setRole(role);
       setMessage({ type: "success", text: "Welcome, Admin! Redirecting..." });
@@ -109,29 +106,46 @@ export default function LoginPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "radial-gradient(circle at top, var(--bg-surface-hover), var(--bg-base) 60%)",
+      position: "relative",
+      overflow: "hidden"
     }}>
+      {/* Decorative Background Elements */}
+      <div style={{
+        position: "absolute", top: "10%", left: "20%", width: "40vw", height: "40vw",
+        background: "radial-gradient(circle, var(--accent-glow), transparent 70%)", filter: "blur(80px)", opacity: 0.5, pointerEvents: "none", zIndex: 0
+      }} />
+      <div style={{
+        position: "absolute", bottom: "10%", right: "10%", width: "30vw", height: "30vw",
+        background: "radial-gradient(circle, hsla(220, 80%, 50%, 0.2), transparent 70%)", filter: "blur(80px)", opacity: 0.5, pointerEvents: "none", zIndex: 0
+      }} />
+
       <div className="glass-panel animate-fade-in" style={{
-        padding: "3rem",
+        padding: "3.5rem",
         width: "100%",
-        maxWidth: 420,
-        boxShadow: "var(--shadow-lg)",
+        maxWidth: 440,
+        boxShadow: "var(--shadow-lg), 0 0 40px rgba(0,0,0,0.5)",
         textAlign: "center",
+        position: "relative",
+        zIndex: 1,
+        borderRadius: "var(--radius-lg)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        background: "rgba(15, 15, 20, 0.6)",
       }}>
         {/* Logo */}
         <div style={{
-          width: 64, height: 64, borderRadius: "16px",
-          background: "linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover))",
+          width: 72, height: 72, borderRadius: "20px",
+          background: "linear-gradient(135deg, var(--accent-primary), hsl(var(--primary-hue), 80%, 55%))",
           display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 1.5rem",
-          boxShadow: "0 8px 16px rgba(100, 108, 255, 0.4)",
+          margin: "0 auto 2rem",
+          boxShadow: "var(--glow-primary), inset 0 2px 4px rgba(255,255,255,0.3)",
+          position: "relative"
         }}>
-          <Lock size={32} color="white" />
+          <Lock size={36} color="white" strokeWidth={2.5} />
         </div>
 
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>Admin Portal</h1>
-        <p style={{ color: "var(--text-muted)", marginBottom: "2rem", fontSize: "0.875rem" }}>
-          Sign in with your admin account
+        <h1 style={{ fontSize: "1.8rem", fontWeight: 700, marginBottom: "0.5rem", letterSpacing: "-0.02em" }}>Admin Portal</h1>
+        <p style={{ color: "var(--text-muted)", marginBottom: "2.5rem", fontSize: "0.95rem" }}>
+          Sign in to access your dashboard
         </p>
 
         {/* Status message */}
@@ -140,37 +154,38 @@ export default function LoginPage() {
             display: "flex",
             alignItems: "center",
             gap: "0.625rem",
-            padding: "0.75rem 1rem",
-            marginBottom: "1.25rem",
-            borderRadius: "var(--radius-sm)",
+            padding: "0.85rem 1rem",
+            marginBottom: "1.5rem",
+            borderRadius: "var(--radius-md)",
             background: messageStyles[message.type].bg,
             border: `1px solid ${messageStyles[message.type].border}`,
             color: messageStyles[message.type].color,
-            fontSize: "0.8125rem",
+            fontSize: "0.85rem",
             fontWeight: 500,
             textAlign: "left",
             lineHeight: 1.4,
             animation: "fadeIn 200ms ease-out",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
           }}>
             <span style={{ flexShrink: 0 }}>{messageStyles[message.type].icon}</span>
             <span>{message.text}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           {/* Email field */}
           <div style={{ textAlign: "left" }}>
             <label style={{
-              display: "block", fontSize: "0.8125rem", fontWeight: 500,
-              marginBottom: "0.375rem", color: "var(--text-muted)",
+              display: "block", fontSize: "0.85rem", fontWeight: 600,
+              marginBottom: "0.5rem", color: "var(--text-main)", letterSpacing: "0.02em"
             }}>
-              Email
+              Email Address
             </label>
             <div style={{ position: "relative" }}>
               <Mail
-                size={16}
+                size={18}
                 style={{
-                  position: "absolute", left: "0.75rem", top: "50%",
+                  position: "absolute", left: "1rem", top: "50%",
                   transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none",
                 }}
               />
@@ -180,7 +195,7 @@ export default function LoginPage() {
                 placeholder="admin@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={{ width: "100%", paddingLeft: "2.5rem" }}
+                style={{ width: "100%", paddingLeft: "3rem", paddingRight: "1rem", height: "3rem", fontSize: "0.95rem" }}
                 autoFocus
                 autoComplete="email"
               />
@@ -190,16 +205,16 @@ export default function LoginPage() {
           {/* Password field */}
           <div style={{ textAlign: "left" }}>
             <label style={{
-              display: "block", fontSize: "0.8125rem", fontWeight: 500,
-              marginBottom: "0.375rem", color: "var(--text-muted)",
+              display: "block", fontSize: "0.85rem", fontWeight: 600,
+              marginBottom: "0.5rem", color: "var(--text-main)", letterSpacing: "0.02em"
             }}>
               Password
             </label>
             <div style={{ position: "relative" }}>
               <KeyRound
-                size={16}
+                size={18}
                 style={{
-                  position: "absolute", left: "0.75rem", top: "50%",
+                  position: "absolute", left: "1rem", top: "50%",
                   transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none",
                 }}
               />
@@ -209,7 +224,7 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ width: "100%", paddingLeft: "2.5rem" }}
+                style={{ width: "100%", paddingLeft: "3rem", paddingRight: "1rem", height: "3rem", fontSize: "0.95rem" }}
                 autoComplete="current-password"
               />
             </div>
@@ -223,14 +238,16 @@ export default function LoginPage() {
             style={{
               width: "100%",
               justifyContent: "center",
-              marginTop: "0.5rem",
-              padding: "0.75rem 1rem",
+              marginTop: "1rem",
+              padding: "0.85rem",
+              fontSize: "1rem",
               opacity: (!isFormValid || loading) ? 0.6 : 1,
               cursor: (!isFormValid || loading) ? "not-allowed" : "pointer",
+              borderRadius: "var(--radius-md)",
             }}
           >
             {loading ? (
-              <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+              <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
             ) : (
               "Sign In"
             )}
@@ -238,7 +255,6 @@ export default function LoginPage() {
         </form>
       </div>
 
-      {/* Spinner animation */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

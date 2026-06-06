@@ -6,9 +6,8 @@ interface Props {
   decks: Deck[];
 }
 
-const STATUS_COLORS: Record<DeckStatus, { bg: string; text: string }> = {
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   active: { bg: "rgba(16, 185, 129, 0.15)", text: "hsl(150, 60%, 45%)" },
-  hidden: { bg: "rgba(245, 158, 11, 0.15)", text: "hsl(40, 90%, 55%)" },
   deleted: { bg: "rgba(220,38,38,0.15)", text: "hsl(0, 80%, 65%)" },
 };
 
