@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { Deck, DeckStatus } from "../../api/decks";
+import type { Deck } from "../../api/decks";
 import { ExternalLink } from "lucide-react";
 
 interface Props {
