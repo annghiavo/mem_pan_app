@@ -513,6 +513,7 @@ export default function CreateModuleScreen() {
             onDragEnd={({ data }) => setTerms(data)}
             keyExtractor={(item) => item.id}
             activationDistance={Platform.OS === 'web' ? 10 : undefined}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             ListHeaderComponent={
               <WebContainer>
@@ -553,7 +554,7 @@ export default function CreateModuleScreen() {
             }
             ListFooterComponent={
               <WebContainer>
-                <View style={{ height: 100 }} />
+                <View style={{ height: 120 }} />
               </WebContainer>
             }
             renderItem={({ item: term, drag, isActive }) => {
