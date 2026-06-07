@@ -670,7 +670,14 @@ export const checkAnswerAPI = (deckId: string, userAnswer: string, correctAnswer
 };
 
 // --- Stats ---
-export const getUserStats = () => request('/stats/me');
+export const getUserStats = () => {
+  let timezone = 'UTC';
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch { /* keep default */ }
+  const params = new URLSearchParams({ timezone });
+  return request(`/stats/me?${params.toString()}`);
+};
 
 export const getUserHeatmap = (fromDate?: string, toDate?: string) => {
   const params = new URLSearchParams();
