@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal, FlatList } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, reorderCards, getCurrentUser } from '../../services/api';
@@ -508,61 +508,60 @@ export default function CreateModuleScreen() {
         </WebContainer>
 
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <DraggableFlatList
-            data={terms}
-            onDragEnd={({ data }) => setTerms(data)}
-            keyExtractor={(item) => item.id}
-            activationDistance={Platform.OS === 'web' ? 10 : undefined}
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.scrollContent}
-            ListHeaderComponent={
-              <WebContainer>
-                {/* Info Section */}
-                <View style={styles.infoSection}>
-                  <TextInput
-                    style={[styles.titleInput, { color: theme.text, borderBottomColor: theme.text }]}
-                    placeholder="Tiêu đề"
-                    placeholderTextColor={theme.textMuted}
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-
-                  {showDescription ? (
+          {Platform.OS === 'web' ? (
+            <FlatList
+              data={terms}
+              keyExtractor={(item) => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={true}
+              ListHeaderComponent={
+                <WebContainer>
+                  {/* Info Section */}
+                  <View style={styles.infoSection}>
                     <TextInput
-                      style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
-                      placeholder="Mô tả"
+                      style={[styles.titleInput, { color: theme.text, borderBottomColor: theme.text }]}
+                      placeholder="Tiêu đề"
                       placeholderTextColor={theme.textMuted}
-                      value={description}
-                      onChangeText={setDescription}
-                      multiline
+                      value={title}
+                      onChangeText={setTitle}
                     />
-                  ) : (
-                    <View style={styles.infoActions}>
-                      {!isEditMode && (
-                        <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
-                          <Ionicons name="document-text-outline" size={20} color={theme.primary} />
-                          <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
+
+                    {showDescription ? (
+                      <TextInput
+                        style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
+                        placeholder="Mô tả"
+                        placeholderTextColor={theme.textMuted}
+                        value={description}
+                        onChangeText={setDescription}
+                        multiline
+                      />
+                    ) : (
+                      <View style={styles.infoActions}>
+                        {!isEditMode && (
+                          <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
+                            <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                            <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={() => setShowDescription(true)}>
+                          <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
                         </TouchableOpacity>
-                      )}
-                      <TouchableOpacity onPress={() => setShowDescription(true)}>
-                        <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              </WebContainer>
-            }
-            ListFooterComponent={
-              <WebContainer>
-                <View style={{ height: 120 }} />
-              </WebContainer>
-            }
-            renderItem={({ item: term, drag, isActive }) => {
-              const previewUri = term.image?.uri || term.imageUrl;
-              return (
-                <ScaleDecorator>
+                      </View>
+                    )}
+                  </View>
+                </WebContainer>
+              }
+              ListFooterComponent={
+                <WebContainer>
+                  <View style={{ height: 120 }} />
+                </WebContainer>
+              }
+              renderItem={({ item: term }) => {
+                const previewUri = term.image?.uri || term.imageUrl;
+                return (
                   <WebContainer>
-                    <View style={[styles.termCard, { backgroundColor: theme.surface, marginBottom: 16, opacity: isActive ? 0.9 : 1, elevation: isActive ? 4 : 1 }]}>
+                    <View style={[styles.termCard, { backgroundColor: theme.surface, marginBottom: 16, elevation: 1 }]}>
                       <View style={styles.termCardHeader}>
                         <View style={{ flex: 1 }}>
                           <TextInput
@@ -582,9 +581,9 @@ export default function CreateModuleScreen() {
                           />
                         </View>
                         <View style={styles.termCardActions}>
-                          <RNGHTouchableOpacity onPressIn={drag} style={[styles.dragHandleBtn, { marginBottom: 8, ...(Platform.OS === 'web' ? { cursor: 'grab' } : {}) } as any]}>
+                          <View style={[styles.dragHandleBtn, { marginBottom: 8 }]}>
                             <Ionicons name="menu" size={24} color={theme.textMuted} />
-                          </RNGHTouchableOpacity>
+                          </View>
                           {previewUri ? (
                             <View style={styles.imagePreviewContainer}>
                               <TouchableOpacity onPress={() => pickImage(term.id)}>
@@ -608,10 +607,114 @@ export default function CreateModuleScreen() {
                       </View>
                     </View>
                   </WebContainer>
-                </ScaleDecorator>
-              );
-            }}
-          />
+                );
+              }}
+            />
+          ) : (
+            <DraggableFlatList
+              data={terms}
+              onDragEnd={({ data }) => setTerms(data)}
+              keyExtractor={(item) => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              ListHeaderComponent={
+                <WebContainer>
+                  {/* Info Section */}
+                  <View style={styles.infoSection}>
+                    <TextInput
+                      style={[styles.titleInput, { color: theme.text, borderBottomColor: theme.text }]}
+                      placeholder="Tiêu đề"
+                      placeholderTextColor={theme.textMuted}
+                      value={title}
+                      onChangeText={setTitle}
+                    />
+
+                    {showDescription ? (
+                      <TextInput
+                        style={[styles.descInput, { color: theme.text, borderBottomColor: theme.border }]}
+                        placeholder="Mô tả"
+                        placeholderTextColor={theme.textMuted}
+                        value={description}
+                        onChangeText={setDescription}
+                        multiline
+                      />
+                    ) : (
+                      <View style={styles.infoActions}>
+                        {!isEditMode && (
+                          <TouchableOpacity style={styles.scanDocButton} onPress={handleImport}>
+                            <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                            <Text style={[styles.scanDocText, { color: theme.primary }]}>Import tệp</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={() => setShowDescription(true)}>
+                          <Text style={[styles.addDescText, { color: theme.primary }]}>+ Mô tả</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </WebContainer>
+              }
+              ListFooterComponent={
+                <WebContainer>
+                  <View style={{ height: 120 }} />
+                </WebContainer>
+              }
+              renderItem={({ item: term, drag, isActive }) => {
+                const previewUri = term.image?.uri || term.imageUrl;
+                return (
+                  <ScaleDecorator>
+                    <WebContainer>
+                      <View style={[styles.termCard, { backgroundColor: theme.surface, marginBottom: 16, opacity: isActive ? 0.9 : 1, elevation: isActive ? 4 : 1 }]}>
+                        <View style={styles.termCardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <TextInput
+                              style={[styles.termInput, { color: theme.text }]}
+                              placeholder="Thuật ngữ"
+                              placeholderTextColor={theme.textMuted}
+                              value={term.term}
+                              onChangeText={(val) => updateTerm(term.id, 'term', val)}
+                            />
+                            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                            <TextInput
+                              style={[styles.termInput, { color: theme.text }]}
+                              placeholder="Định nghĩa"
+                              placeholderTextColor={theme.textMuted}
+                              value={term.definition}
+                              onChangeText={(val) => updateTerm(term.id, 'definition', val)}
+                            />
+                          </View>
+                          <View style={styles.termCardActions}>
+                            <RNGHTouchableOpacity onPressIn={drag} style={[styles.dragHandleBtn, { marginBottom: 8 }]}>
+                              <Ionicons name="menu" size={24} color={theme.textMuted} />
+                            </RNGHTouchableOpacity>
+                            {previewUri ? (
+                              <View style={styles.imagePreviewContainer}>
+                                <TouchableOpacity onPress={() => pickImage(term.id)}>
+                                  <Image source={{ uri: previewUri }} style={styles.imagePreview} />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(term.id)}>
+                                  <Ionicons name="close-circle" size={20} color="#ef4444" />
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <TouchableOpacity style={styles.addImageBtn} onPress={() => pickImage(term.id)}>
+                                <Ionicons name="image-outline" size={24} color={theme.primary} />
+                              </TouchableOpacity>
+                            )}
+                            {terms.length > 1 && (
+                              <TouchableOpacity style={styles.deleteTermBtn} onPress={() => removeTerm(term.id)}>
+                                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    </WebContainer>
+                  </ScaleDecorator>
+                );
+              }}
+            />
+          )}
         </GestureHandlerRootView>
 
         <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={addTerm}>
