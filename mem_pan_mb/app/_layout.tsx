@@ -27,7 +27,7 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 }
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { bootstrapNotifications } from '@/services/notifications';
+import { bootstrapNotifications, syncTimezone } from '@/services/notifications';
 import { installGlobalErrorHandlers, devlog } from '@/services/devlog';
 
 // Install once at module load so we capture errors that happen before
@@ -42,10 +42,11 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   // Register FCM token + report device timezone once the app is mounted.
-  // Safe to run before login: bootstrapNotifications no-ops if auth is missing.
+  // Safe to run before login: bootstrapNotifications and syncTimezone no-op if auth is missing.
   useEffect(() => {
     devlog.event('app:mount');
     bootstrapNotifications();
+    syncTimezone();
     return () => devlog.event('app:unmount');
   }, []);
 

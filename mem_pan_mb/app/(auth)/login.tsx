@@ -85,8 +85,11 @@ export default function LoginScreen() {
         // have an auth token. The bootstrap call from app/_layout.tsx no-ops
         // pre-login, so this is what actually registers the device.
         import('../../services/notifications')
-          .then(({ bootstrapNotifications }) => bootstrapNotifications())
-          .catch((e) => devlog.warn('login: bootstrapNotifications failed', { error: String(e) }));
+          .then(({ bootstrapNotifications, syncTimezone }) => {
+            bootstrapNotifications();
+            syncTimezone();
+          })
+          .catch((e) => devlog.warn('login: bootstrapNotifications/syncTimezone failed', { error: String(e) }));
 
         showAlert('Thành công', 'Đăng nhập thành công!', () => router.replace('/(tabs)'));
         if (Platform.OS === 'web') return; // router.replace already called in showAlert callback

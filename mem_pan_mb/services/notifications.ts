@@ -62,11 +62,16 @@ const REMINDERS_CHANNEL_ID = 'reminders';
  * last report. Stored locally so a roaming device only PATCHes when needed.
  */
 export async function syncTimezone(): Promise<void> {
-  const tz = getDeviceTimezone();
-  if (!tz) return;
   try {
+    const authToken = await AsyncStorage.getItem('authToken');
+    if (!authToken) return;
+
+    const tz = getDeviceTimezone();
+    if (!tz) return;
+
     const last = await AsyncStorage.getItem(TIMEZONE_KEY);
     if (last === tz) return;
+
     await updateUserTimezone(tz);
     await AsyncStorage.setItem(TIMEZONE_KEY, tz);
   } catch (e) {
