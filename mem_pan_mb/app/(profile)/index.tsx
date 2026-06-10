@@ -91,6 +91,8 @@ export default function ProfileScreen() {
                         </View>
 
                         <View style={styles.menuContainer}>
+                            {renderMenuItem('Gói Plus', 'star', () => router.push('/(profile)/plus' as any))}
+                            {renderMenuItem('Creator Dashboard', 'podium-outline', () => router.push('/(profile)/creator' as any))}
                             {renderMenuItem('Thành tựu', 'trophy-outline', () => router.push('/(profile)/achievements' as any))}
                             {renderMenuItem('Cài đặt', 'settings-outline', () => router.push('/(profile)/settings' as any))}
                         </View>

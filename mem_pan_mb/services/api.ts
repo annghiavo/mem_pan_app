@@ -821,3 +821,47 @@ export const reportUser = (userId: string, payload: { reasonCategory: string; de
     body: JSON.stringify(payload),
   });
 };
+
+// --- Billing / Plus ---
+export const checkoutPlus = (planCode: string) => {
+  return request('/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ planCode }),
+  });
+};
+
+export const getMySubscription = () => {
+  return request('/billing/subscription/me');
+};
+
+// --- Creator ---
+export const getCreatorProfile = (userId: string) => {
+  return request(`/creators/${userId}`);
+};
+
+export const upsertCreatorProfile = (data: { displayName?: string; bio?: string; bankName?: string; bankAccountNumber?: string; bankAccountName?: string }) => {
+  return request('/creators/me', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const followCreator = (creatorId: string) => {
+  return request(`/creators/${creatorId}/follow`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+};
+
+// --- Deck Reviews ---
+export const upsertDeckReview = (deckId: string, rating: number) => {
+  return request(`/decks/${deckId}/review`, {
+    method: 'PUT',
+    body: JSON.stringify({ rating }),
+  });
+};
+
+export const getDeckReviews = (deckId: string, page = 1, pageSize = 20) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return request(`/decks/${deckId}/reviews?${params.toString()}`);
+};

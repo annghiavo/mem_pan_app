@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser, upsertDeckReview } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
@@ -95,6 +95,10 @@ export default function ModuleDetailScreen() {
   const [cardBack, setCardBack] = useState('');
   const [cardImage, setCardImage] = useState<any>(null);
   const [isUpdatingCard, setIsUpdatingCard] = useState(false);
+
+  // Rating State
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [myRating, setMyRating] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -375,6 +379,23 @@ export default function ModuleDetailScreen() {
     ]);
   };
 
+  const handleSubmitRating = async () => {
+    if (myRating < 1 || myRating > 5) return;
+    try {
+      await upsertDeckReview(id as string, myRating);
+      setShowRatingModal(false);
+      Alert.alert('Thành công', 'Cảm ơn bạn đã đánh giá học phần!');
+      // Optimistic update
+      setDeckData((prev: any) => ({
+        ...prev,
+        avgRating: prev.avgRating ? ((prev.avgRating * prev.totalReviews) + myRating) / (prev.totalReviews + 1) : myRating,
+        totalReviews: (prev.totalReviews || 0) + 1,
+      }));
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể gửi đánh giá.');
+    }
+  };
+
   if (!deckData) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
@@ -434,6 +455,23 @@ export default function ModuleDetailScreen() {
           <Text style={[styles.authorName, { color: theme.text }]}>{creatorUsername || 'Bạn'}</Text>
           <Ionicons name="checkmark-circle" size={16} color="#10b981" style={{ marginLeft: 4 }} />
           <Text style={[styles.termCount, { color: theme.textMuted }]}> | {cards.length} thuật ngữ</Text>
+        </View>
+
+        {/* Deck Info: Rating & Access Level */}
+        <View style={styles.deckStatsContainer}>
+          {deckData.accessLevel === 'plus' && (
+             <View style={[styles.badge, { backgroundColor: '#f59e0b' }]}>
+               <Ionicons name="star" size={14} color="#fff" />
+               <Text style={styles.badgeText}>Plus</Text>
+             </View>
+          )}
+          <TouchableOpacity style={styles.ratingBadge} onPress={() => setShowRatingModal(true)}>
+             <Ionicons name="star" size={16} color="#f59e0b" />
+             <Text style={[styles.ratingText, { color: theme.text }]}>
+               {typeof deckData.avgRating === 'number' ? deckData.avgRating.toFixed(1) : (deckData.avgRating || '0.0')} ({deckData.totalReviews || 0})
+             </Text>
+             <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
+          </TouchableOpacity>
         </View>
 
         {/* Action Buttons */}
@@ -741,6 +779,30 @@ export default function ModuleDetailScreen() {
         targetType="deck"
         targetId={id as string}
       />
+
+      {/* Rating Modal */}
+      <Modal visible={showRatingModal} transparent={true} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowRatingModal(false)}>
+          <View style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+            <View style={[styles.bottomSheetHandle, { backgroundColor: theme.border }]} />
+            <Text style={[styles.modalTitle, { color: theme.text, textAlign: 'center', marginBottom: 16 }]}>Đánh giá học phần</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 24, gap: 12 }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <TouchableOpacity key={star} onPress={() => setMyRating(star)}>
+                  <Ionicons name={star <= myRating ? "star" : "star-outline"} size={40} color="#f59e0b" />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity 
+              style={{ backgroundColor: myRating > 0 ? theme.primary : theme.border, padding: 16, borderRadius: 12, alignItems: 'center' }} 
+              onPress={handleSubmitRating} 
+              disabled={myRating === 0}
+            >
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Gửi đánh giá</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -762,6 +824,11 @@ const styles = StyleSheet.create({
   authorAvatarText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
   authorName: { fontSize: 16, fontWeight: '600' },
   termCount: { fontSize: 16 },
+  deckStatsContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 12 },
+  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ratingText: { fontSize: 14, fontWeight: '600' },
   actionsContainer: { marginBottom: 32 },
   actionButton: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   actionButtonText: { marginLeft: 16, fontSize: 16, fontWeight: '600', flex: 1 },

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Flag, Users, Layers, LogOut, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Flag, Users, Layers, LogOut, Mail, ShieldCheck, ShieldAlert, DollarSign } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 
@@ -15,6 +15,7 @@ const LINKS: NavLink[] = [
   { to: "/appeals", icon: ShieldAlert, label: "Appeals" },
   { to: "/users", icon: Users, label: "Users" },
   { to: "/decks", icon: Layers, label: "Decks" },
+  { to: "/revenue", icon: DollarSign, label: "Revenue & Payouts", adminOnly: true },
   { to: "/email-templates", icon: Mail, label: "Email Templates", adminOnly: true },
   { to: "/moderators", icon: ShieldCheck, label: "Moderators", adminOnly: true },
 ];
