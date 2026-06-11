@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useColorScheme, Modal, FlatList } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, reorderCards, getCurrentUser } from '../../services/api';
+import { createDeck, bulkCreateCards, parseImportFile, createCard, getDeck, updateDeck, updateDeckVisibility, getDeckCards, updateCard, deleteCard, reorderCards, getCurrentUser, updateDeckAccessLevel } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -56,6 +56,7 @@ export default function CreateModuleScreen() {
     { id: '2', term: '', definition: '' },
   ]);
   const [originalCards, setOriginalCards] = useState<Record<string, OriginalCard>>({});
+  const [accessLevel, setAccessLevel] = useState<'free' | 'plus'>('free');
 
   const [importingFileName, setImportingFileName] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState(0);
@@ -97,6 +98,7 @@ export default function CreateModuleScreen() {
         setDescription(d.description || '');
         if (d.description) setShowDescription(true);
         setWhoCanView(d.isPublic ? 'Mọi người' : 'Chỉ tôi');
+        setAccessLevel(d.accessLevel || d.access_level || 'free');
 
         const existing = (cardsRes?.cards || []) as any[];
         if (existing.length > 0) {
@@ -336,6 +338,7 @@ export default function CreateModuleScreen() {
       try {
         await updateDeck(editId, title.trim(), description.trim());
         await updateDeckVisibility(editId, whoCanView === 'Mọi người');
+        await updateDeckAccessLevel(editId, accessLevel);
 
         // Delete removed cards.
         for (const cid of removedCardIds) {
@@ -418,6 +421,10 @@ export default function CreateModuleScreen() {
       const isPublic = whoCanView === 'Mọi người';
       const deckRes = await createDeck(title.trim(), description.trim(), isPublic);
       const deckId = deckRes.deck.deckId;
+
+      if (accessLevel === 'plus') {
+        await updateDeckAccessLevel(deckId, 'plus');
+      }
 
       // 2. Add Cards to Deck
       // bulkCreateCards sets position = array-index, so send cards without images
@@ -808,6 +815,25 @@ export default function CreateModuleScreen() {
                   <Text style={[styles.settingLabel, { color: theme.text }]}>Chỉ tôi</Text>
                 </View>
                 {whoCanView === 'Chỉ tôi' && <Ionicons name="checkmark" size={22} color={theme.primary} />}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: 24 }]}>Loại học phần</Text>
+            <View style={[styles.settingGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <TouchableOpacity style={styles.settingRow} onPress={() => setAccessLevel('free')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="star-outline" size={20} color={theme.textMuted} style={{ marginRight: 12 }} />
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>Miễn phí</Text>
+                </View>
+                {accessLevel !== 'plus' && <Ionicons name="checkmark" size={22} color={theme.primary} />}
+              </TouchableOpacity>
+              <View style={[styles.modalDivider, { backgroundColor: theme.border }]} />
+              <TouchableOpacity style={styles.settingRow} onPress={() => setAccessLevel('plus')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="star" size={20} color="#f59e0b" style={{ marginRight: 12 }} />
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>Plus</Text>
+                </View>
+                {accessLevel === 'plus' && <Ionicons name="checkmark" size={22} color={theme.primary} />}
               </TouchableOpacity>
             </View>
           </ScrollView>

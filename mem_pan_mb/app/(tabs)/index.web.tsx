@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks } from '../../services/api';
+import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks, getMySubscription, normalizeSubscription } from '../../services/api';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
 // Web specific hoverable wrapper
 function HoverableCard({ children, style, onPress, theme }: any) {
@@ -48,10 +49,17 @@ export default function HomeWebScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [username, setUsername] = useState('');
+    const [hasPlus, setHasPlus] = useState(false);
 
     const fetchData = useCallback(async () => {
         let recentSessionDecks: any[] = [];
         try {
+            try {
+                const subRes = await getMySubscription(true).catch(() => null);
+                const sub = normalizeSubscription(subRes);
+                setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+            } catch (e) { }
+
             try {
                 const res = await getRecentDecks();
                 recentSessionDecks = res.decks || [];
@@ -139,6 +147,11 @@ export default function HomeWebScreen() {
             if (u?.username) setUsername(u.username);
             if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
         }).catch(() => { });
+
+        getMySubscription(true).then(subRes => {
+            const sub = normalizeSubscription(subRes);
+            setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+        }).catch(() => { });
     }, [fetchData]);
 
     return (
@@ -148,6 +161,16 @@ export default function HomeWebScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
             >
                 <View style={styles.contentWrapper}>
+
+                    {/* Brand Header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 12 }}>
+                        <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text }}>Mem Pan</Text>
+                        {hasPlus && (
+                            <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                                <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}>Plus</Text>
+                            </View>
+                        )}
+                    </View>
 
                     {/* Header */}
                     <View style={styles.header}>
@@ -164,6 +187,34 @@ export default function HomeWebScreen() {
                             <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm học phần, thư mục...</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* Được học nhiều nhất - Top public decks by learners */}
+                    {topDecks.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
+                            <View style={styles.gridContainerSmall}>
+                                {topDecks.map((deck, idx) => (
+                                    <HoverableCard
+                                        key={`top-${idx}`}
+                                        theme={theme}
+                                        style={[styles.recentItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                                        onPress={() => router.push(`/module/${deck.deckId}` as any)}
+                                    >
+                                        <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
+                                            <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 18 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
+                                        </View>
+                                        <View style={styles.recentInfo}>
+                                            <View style={styles.deckTitleRow}>
+                                                <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                                                {isPlusDeck(deck) ? <PlusDeckBadge compact /> : null}
+                                            </View>
+                                            <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ • {deck.learnerCount || 0} người học</Text>
+                                        </View>
+                                    </HoverableCard>
+                                ))}
+                            </View>
+                        </View>
+                    )}
 
                     {/* Học tiếp - Study Sessions with Progress */}
                     {studySessions.length > 0 && (
@@ -182,7 +233,10 @@ export default function HomeWebScreen() {
                                             onPress={() => router.push(`/module/${session.deckId}` as any)}
                                         >
                                             <View style={styles.cardHeader}>
-                                                <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={2}>{session.name}</Text>
+                                                <View style={styles.cardTitleGroup}>
+                                                    <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={2}>{session.name}</Text>
+                                                    {isPlusDeck(session) ? <PlusDeckBadge compact /> : null}
+                                                </View>
                                             </View>
                                             <View style={{ flex: 1 }} />
                                             <View style={styles.progressContainer}>
@@ -223,33 +277,11 @@ export default function HomeWebScreen() {
                                             <Text style={{ color: isDark ? '#5eead4' : '#008080', fontWeight: 'bold', fontSize: 18 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
                                         </View>
                                         <View style={styles.recentInfo}>
-                                            <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                                            <View style={styles.deckTitleRow}>
+                                                <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                                                {isPlusDeck(deck) ? <PlusDeckBadge compact /> : null}
+                                            </View>
                                             <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ • Tác giả: {deck.creatorUsername === username ? 'Bạn' : (deck.creatorUsername || 'Bạn')}</Text>
-                                        </View>
-                                    </HoverableCard>
-                                ))}
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Được học nhiều nhất - Top public decks by learners */}
-                    {topDecks.length > 0 && (
-                        <View style={styles.section}>
-                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
-                            <View style={styles.gridContainerSmall}>
-                                {topDecks.map((deck, idx) => (
-                                    <HoverableCard
-                                        key={`top-${idx}`}
-                                        theme={theme}
-                                        style={[styles.recentItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                                        onPress={() => router.push(`/module/${deck.deckId}` as any)}
-                                    >
-                                        <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
-                                            <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 18 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
-                                        </View>
-                                        <View style={styles.recentInfo}>
-                                            <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
-                                            <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thuật ngữ • {deck.learnerCount || 0} người học</Text>
                                         </View>
                                     </HoverableCard>
                                 ))}
@@ -359,6 +391,12 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         lineHeight: 24,
+        flex: 1,
+    },
+    cardTitleGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     progressContainer: {
         marginBottom: 16,
@@ -411,10 +449,16 @@ const styles = StyleSheet.create({
     recentInfo: {
         flex: 1,
     },
+    deckTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
+    },
     recentTitle: {
         fontSize: 16,
         fontWeight: '600',
-        marginBottom: 4,
+        flex: 1,
     },
     recentSubtitle: {
         fontSize: 14,

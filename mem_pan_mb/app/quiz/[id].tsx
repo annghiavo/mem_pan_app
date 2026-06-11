@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import {
   startStudySession, reviewCard, finishStudySession,
   getDeckCards, getDeckProgress, getDeckStudySettings,
+  isPlusAccessError, PLUS_REQUIRED_MESSAGE,
 } from '../../services/api';
 import { StudySettings, defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
@@ -195,6 +196,7 @@ export default function QuizScreen() {
   // ─── Core state ───────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(true);
+  const [emptyMessage, setEmptyMessage] = useState('Không có thẻ nào để học lúc này!');
   const [settings, setSettings] = useState<StudySettings>(defaultStudySettings);
   const sessionIdRef = useRef<string | null>(null);
   // Stable refs for data used inside async callbacks
@@ -273,6 +275,12 @@ export default function QuizScreen() {
 
   const initSession = useCallback(async () => {
     setLoading(true);
+    setEmptyMessage('Không có thẻ nào để học lúc này!');
+    setCurrentBatch([]);
+    setPendingPool([]);
+    setBatchIndex(0);
+    setShowRoundSummary(false);
+    setSessionFinished(false);
     submittedCardsRef.current = new Set();
     try {
       const [cardsRes, settingsRes] = await Promise.all([
@@ -339,6 +347,9 @@ export default function QuizScreen() {
       setPendingPool(remaining);
     } catch (err) {
       console.error('Quiz init error:', err);
+      if (isPlusAccessError(err)) {
+        setEmptyMessage(PLUS_REQUIRED_MESSAGE);
+      }
     } finally {
       setLoading(false);
     }
@@ -554,7 +565,7 @@ export default function QuizScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16 }}>
-          Không có thẻ nào để học lúc này!
+          {emptyMessage}
         </Text>
         <TouchableOpacity style={styles.actionButton} onPress={() => router.back()}>
           <Text style={styles.actionButtonText}>Quay lại</Text>

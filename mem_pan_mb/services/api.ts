@@ -30,6 +30,26 @@ async function appendImageFile(
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/v1'; let authToken = '';
 let currentRefreshToken = '';
 
+export const PLUS_REQUIRED_MESSAGE = 'Please purchase the plus package to start learning.';
+
+export type ApiError = Error & {
+  status?: number;
+  data?: any;
+};
+
+export const isPlusAccessError = (error: unknown): boolean => {
+  const err = error as ApiError | undefined;
+  if (err?.status !== 403) return false;
+  const message = String(err?.message || '').toLowerCase();
+  return (
+    !message ||
+    message.includes('plus') ||
+    message.includes('subscription') ||
+    message.includes('không có quyền') ||
+    message.includes('khong co quyen')
+  );
+};
+
 // --- API call logging (dev only) ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const LOG_API = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
@@ -189,7 +209,7 @@ const handleResponse = async (response: Response, method = 'GET', url = '', quie
   if (!quiet) logResponse(method, url, response.status, data);
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && !quiet) {
       const onPublicAuthRoute =
         typeof window !== 'undefined' &&
         /\/(reset-password|login|register)(\b|\/|\?|$)/.test(window.location?.pathname || '');
@@ -202,7 +222,10 @@ const handleResponse = async (response: Response, method = 'GET', url = '', quie
       }
       return {};
     }
-    throw new Error(extractApiMessage(data, response.status));
+    const error = new Error(extractApiMessage(data, response.status)) as ApiError;
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -379,6 +402,13 @@ export const updateDeckVisibility = (deckId: string, isPublic: boolean) => {
   return request(`/decks/${deckId}/visibility`, {
     method: 'PATCH',
     body: JSON.stringify({ isPublic }),
+  });
+};
+
+export const updateDeckAccessLevel = (deckId: string, accessLevel: 'free' | 'plus' | 'private') => {
+  return request(`/decks/${deckId}/access`, {
+    method: 'PATCH',
+    body: JSON.stringify({ access_level: accessLevel }),
   });
 };
 
@@ -823,15 +853,42 @@ export const reportUser = (userId: string, payload: { reasonCategory: string; de
 };
 
 // --- Billing / Plus ---
+export const normalizeCheckoutUrl = (data: any): string => {
+  return data?.checkoutUrl || data?.checkout_url || data?.CheckoutURL || '';
+};
+
+export const normalizeSubscription = (data: any): any => {
+  const raw = data?.subscription || data?.data?.subscription || data?.data || data || null;
+  if (!raw) return null;
+  return {
+    ...raw,
+    active: raw.active ?? raw.Active ?? false,
+    subscription_id: raw.subscription_id ?? raw.SubscriptionID ?? '',
+    subscriptionId: raw.subscriptionId ?? raw.subscription_id ?? raw.SubscriptionID ?? '',
+    plan_code: raw.plan_code ?? raw.PlanCode ?? '',
+    planCode: raw.planCode ?? raw.plan_code ?? raw.PlanCode ?? '',
+    status: raw.status ?? raw.Status ?? 'none',
+    current_period_end: raw.current_period_end ?? raw.CurrentPeriodEnd ?? '',
+    currentPeriodEnd: raw.currentPeriodEnd ?? raw.current_period_end ?? raw.CurrentPeriodEnd ?? '',
+  };
+};
+
 export const checkoutPlus = (planCode: string) => {
   return request('/billing/checkout', {
     method: 'POST',
-    body: JSON.stringify({ planCode }),
+    body: JSON.stringify({ plan_code: planCode }),
   });
 };
 
-export const getMySubscription = () => {
-  return request('/billing/subscription/me');
+export const getMySubscription = (quiet = false) => {
+  return request('/billing/subscription/me', undefined, { quiet });
+};
+
+export const confirmPayment = (orderCode: number) => {
+  return request('/billing/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ order_code: orderCode }),
+  });
 };
 
 // --- Creator ---

@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks } from '../../services/api';
+import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks, getMySubscription, normalizeSubscription } from '../../services/api';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -25,11 +26,18 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [username, setUsername] = useState('');
+  const [hasPlus, setHasPlus] = useState(false);
 
   const fetchData = useCallback(async () => {
     const studyDeckIds = new Set<string>();
     let recentSessionDecks: any[] = [];
     try {
+      try {
+        const subRes = await getMySubscription(true).catch(() => null);
+        const sub = normalizeSubscription(subRes);
+        setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+      } catch (e) { }
+
       try {
         const res = await getRecentDecks();
         recentSessionDecks = res.decks || [];
@@ -128,6 +136,10 @@ export default function HomeScreen() {
         const u = data.user || data.data || data;
         if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
         if (u?.username) setUsername(u.username);
+
+        const subRes = await getMySubscription(true).catch(() => null);
+        const sub = normalizeSubscription(subRes);
+        setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
       } catch (e) { }
     };
     fetchUser();
@@ -143,7 +155,26 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
       >
-        {/* Header */}
+        {/* Brand Header */}
+        <View style={styles.brandRow}>
+          <View style={styles.brandTitleContainer}>
+            <Text style={[styles.brandText, { color: theme.text }]}>Mem Pan</Text>
+            {hasPlus && (
+              <View style={styles.plusBadge}>
+                <Text style={styles.plusBadgeText}>Plus</Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(profile)' as any)}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : username ? (
+              <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
+            ) : null}
+          </TouchableOpacity>
+        </View>
+
+        {/* Search row */}
         <View style={styles.header}>
           <TouchableOpacity
             style={[styles.searchContainer, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
@@ -153,14 +184,34 @@ export default function HomeScreen() {
             <Ionicons name="search" size={20} color={theme.textMuted} />
             <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push('/(profile)' as any)}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-            ) : username ? (
-              <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
-            ) : null}
-          </TouchableOpacity>
         </View>
+
+        {/* Được học nhiều nhất - Top public decks by learners (2-row grid) */}
+        {topDecks.length > 0 ? (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {Array.from({ length: Math.ceil(topDecks.length / 2) }).map((_, colIdx) => (
+                <View key={`top-col-${colIdx}`} style={styles.recentColumn}>
+                  {topDecks.slice(colIdx * 2, colIdx * 2 + 2).map((deck, rowIdx) => (
+                    <TouchableOpacity key={`top-${colIdx}-${rowIdx}`} style={[styles.recentItemHorizontal, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
+                      <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
+                        <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 16 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.recentInfo}>
+                        <View style={styles.deckTitleRow}>
+                          <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                          {isPlusDeck(deck) ? <PlusDeckBadge compact /> : null}
+                        </View>
+                        <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thẻ • {deck.learnerCount || 0} người học</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
 
         {/* Học tiếp - Study Sessions with Progress */}
         {studySessions.length > 0 ? (
@@ -174,7 +225,10 @@ export default function HomeScreen() {
                 return (
                   <TouchableOpacity key={`session-${idx}`} style={[styles.continueCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${session.deckId}` as any)}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>{session.name}</Text>
+                      <View style={styles.cardTitleGroup}>
+                        <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>{session.name}</Text>
+                        {isPlusDeck(session) ? <PlusDeckBadge compact /> : null}
+                      </View>
                       <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
                     </View>
                     <View style={styles.progressContainer}>
@@ -206,32 +260,11 @@ export default function HomeScreen() {
                         <Text style={{ color: isDark ? '#5eead4' : '#008080', fontWeight: 'bold', fontSize: 16 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
                       </View>
                       <View style={styles.recentInfo}>
-                        <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                        <View style={styles.deckTitleRow}>
+                          <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                          {isPlusDeck(deck) ? <PlusDeckBadge compact /> : null}
+                        </View>
                         <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thẻ • Tác giả: {deck.creatorUsername === username ? 'Bạn' : (deck.creatorUsername || 'Bạn')}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
-          </>
-        ) : null}
-
-        {/* Được học nhiều nhất - Top public decks by learners (2-row grid) */}
-        {topDecks.length > 0 ? (
-          <>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Được học nhiều nhất</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {Array.from({ length: Math.ceil(topDecks.length / 2) }).map((_, colIdx) => (
-                <View key={`top-col-${colIdx}`} style={styles.recentColumn}>
-                  {topDecks.slice(colIdx * 2, colIdx * 2 + 2).map((deck, rowIdx) => (
-                    <TouchableOpacity key={`top-${colIdx}-${rowIdx}`} style={[styles.recentItemHorizontal, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/module/${deck.deckId}` as any)}>
-                      <View style={[styles.recentIcon, { backgroundColor: isDark ? '#7c2d12' : '#ffedd5' }]}>
-                        <Text style={{ color: isDark ? '#fdba74' : '#ea580c', fontWeight: 'bold', fontSize: 16 }}>{(deck.name || 'D').charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <View style={styles.recentInfo}>
-                        <Text style={[styles.recentTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
-                        <Text style={[styles.recentSubtitle, { color: theme.textMuted }]}>{deck.cardCount || 0} thẻ • {deck.learnerCount || 0} người học</Text>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -257,11 +290,37 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    marginTop: 10,
+  },
+  brandTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  plusBadge: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  plusBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
-    marginTop: 10,
   },
   searchContainer: {
     flex: 1,
@@ -328,6 +387,14 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    flex: 1,
+  },
+  cardTitleGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: 8,
   },
   progressContainer: {
     marginBottom: 12,
@@ -388,10 +455,16 @@ const styles = StyleSheet.create({
   recentInfo: {
     flex: 1,
   },
+  deckTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   recentTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
+    flex: 1,
   },
   recentSubtitle: {
     fontSize: 14,

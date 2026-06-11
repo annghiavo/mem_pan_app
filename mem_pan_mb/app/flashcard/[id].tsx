@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Dimensions, ActivityIndicator, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getDeckCards } from '../../services/api';
+import { getDeckCards, isPlusAccessError, PLUS_REQUIRED_MESSAGE } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
 
 const { width, height } = Dimensions.get('window');
@@ -46,6 +46,7 @@ export default function FlashcardScreen() {
 
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [emptyMessage, setEmptyMessage] = useState('Không có thẻ nào trong học phần này.');
 
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
@@ -54,10 +55,15 @@ export default function FlashcardScreen() {
   useEffect(() => {
     const fetchCards = async () => {
       try {
+        setEmptyMessage('Không có thẻ nào trong học phần này.');
+        setCards([]);
         const response = await getDeckCards(deckId);
         setCards(response.cards || []);
       } catch (error) {
         console.error('Error fetching cards:', error);
+        if (isPlusAccessError(error)) {
+          setEmptyMessage(PLUS_REQUIRED_MESSAGE);
+        }
       } finally {
         setLoading(false);
       }
@@ -113,7 +119,7 @@ export default function FlashcardScreen() {
   if (cards.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16 }}>Không có thẻ nào trong học phần này.</Text>
+        <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16, textAlign: 'center', paddingHorizontal: 24 }}>{emptyMessage}</Text>
         <TouchableOpacity style={{ backgroundColor: theme.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 }} onPress={() => router.back()}>
           <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>Quay lại</Text>
         </TouchableOpacity>

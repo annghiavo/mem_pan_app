@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser, isPlusAccessError, PLUS_REQUIRED_MESSAGE } from '../../services/api';
 import { devlog } from '../../services/devlog';
 import Papa from 'papaparse';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { formatNextReview } from '../../utils/timeFormatting';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
 function buildDeckShareUrl(deckId: string): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -78,6 +79,7 @@ export default function ModuleDetailWebScreen() {
 
   const [deckData, setDeckData] = useState<any>(null);
   const [cards, setCards] = useState<any[]>([]);
+  const [cardsAccessBlocked, setCardsAccessBlocked] = useState(false);
   const [progress, setProgress] = useState<any>(null);
   const [dueCount, setDueCount] = useState<number>(0);
   // Re-render the next-review countdown over time; the label is derived from
@@ -95,6 +97,7 @@ export default function ModuleDetailWebScreen() {
     if (!creatorUsername) return true;
     return creatorUsername === currentUsername;
   })();
+  const deckIsPlus = isPlusDeck(deckData);
 
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
@@ -118,9 +121,16 @@ export default function ModuleDetailWebScreen() {
       devlog.event('module:mount', { deckId: id });
       const fetchDeckData = async () => {
         try {
+          setCardsAccessBlocked(false);
           const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
             getDeck(id as string),
-            getDeckCards(id as string),
+            getDeckCards(id as string).catch((error) => {
+              if (isPlusAccessError(error)) {
+                setCardsAccessBlocked(true);
+                return { cards: [] };
+              }
+              throw error;
+            }),
             getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
             getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; }),
             getCurrentUser().catch(() => null),
@@ -397,6 +407,9 @@ export default function ModuleDetailWebScreen() {
     );
   }
 
+  const learningActionsDisabled = cards.length === 0 && !cardsAccessBlocked;
+  const learningActionsMuted = cards.length === 0 && !cardsAccessBlocked;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border, paddingHorizontal: isMobile ? 12 : 32 }]}>
@@ -416,7 +429,10 @@ export default function ModuleDetailWebScreen() {
 
           <View style={[styles.heroSection, { flexDirection: isMobile ? 'column' : 'row' }]}>
             <View style={[styles.heroLeft]}>
-              <Text style={[styles.moduleTitle, { color: theme.text, fontSize: isMobile ? 22 : 36 }]}>{deckData.name}</Text>
+              <View style={styles.moduleTitleRow}>
+                <Text style={[styles.moduleTitle, { color: theme.text, fontSize: isMobile ? 22 : 36 }]}>{deckData.name}</Text>
+                {deckIsPlus ? <PlusDeckBadge /> : null}
+              </View>
               {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted, fontSize: isMobile ? 15 : 18 }]}>{deckData.description}</Text> : null}
 
               <View style={styles.authorContainer}>
@@ -433,17 +449,17 @@ export default function ModuleDetailWebScreen() {
               </View>
 
               <View style={[styles.actionsGrid, { gap: isMobile ? 10 : 16 }]}>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
-                  <Ionicons name="albums" size={32} color={cards.length > 0 ? "#3b82f6" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Flashcard</Text>
+                <HoverableCard theme={theme} disabled={learningActionsDisabled} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
+                  <Ionicons name="albums" size={32} color={!learningActionsMuted ? "#3b82f6" : theme.textMuted} />
+                  <Text style={[styles.actionCardText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Flashcard</Text>
                 </HoverableCard>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}` as any)}>
-                  <Ionicons name="refresh-circle" size={32} color={cards.length > 0 ? "#8b5cf6" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Ôn tập</Text>
+                <HoverableCard theme={theme} disabled={learningActionsDisabled} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}` as any)}>
+                  <Ionicons name="refresh-circle" size={32} color={!learningActionsMuted ? "#8b5cf6" : theme.textMuted} />
+                  <Text style={[styles.actionCardText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Ôn tập</Text>
                 </HoverableCard>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/practice-setup/${id}` as any)}>
-                  <Ionicons name="document-text" size={32} color={cards.length > 0 ? "#10b981" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Kiểm tra</Text>
+                <HoverableCard theme={theme} disabled={learningActionsDisabled} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/practice-setup/${id}` as any)}>
+                  <Ionicons name="document-text" size={32} color={!learningActionsMuted ? "#10b981" : theme.textMuted} />
+                  <Text style={[styles.actionCardText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Kiểm tra</Text>
                 </HoverableCard>
               </View>
             </View>
@@ -454,6 +470,10 @@ export default function ModuleDetailWebScreen() {
                   <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
                     <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
                     <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} />
+                  </TouchableOpacity>
+                ) : cardsAccessBlocked ? (
+                  <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
+                    <Text style={[styles.flashcardWord, { color: theme.text, textAlign: 'center' }]}>{PLUS_REQUIRED_MESSAGE}</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -486,13 +506,13 @@ export default function ModuleDetailWebScreen() {
           })()}
 
           <View style={[styles.progressStatsGrid, { flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 24 }]}>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
+            <HoverableCard theme={theme} disabled={learningActionsDisabled} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
               <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount ?? 0}</Text>
               </View>
               <Text style={[styles.statLabel, { color: theme.text }]}>Chưa học</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}>
+            <HoverableCard theme={theme} disabled={learningActionsDisabled} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}>
               <View style={[styles.statRing, { borderColor: '#f59e0b' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.learnCount ?? 0}</Text>
               </View>
@@ -772,7 +792,8 @@ const styles = StyleSheet.create({
   flashcardWord: { fontSize: 32, fontWeight: '500', textAlign: 'center', paddingHorizontal: 24 },
   fullscreenIcon: { position: 'absolute', bottom: 20, right: 20 },
 
-  moduleTitle: { fontSize: 36, fontWeight: 'bold', marginBottom: 12 },
+  moduleTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  moduleTitle: { fontSize: 36, fontWeight: 'bold', flexShrink: 1 },
   moduleDesc: { fontSize: 18, marginBottom: 16 },
   authorContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
   authorAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', marginRight: 12 },

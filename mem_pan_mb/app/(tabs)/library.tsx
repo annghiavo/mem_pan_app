@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getDecks, getFolders, getAllLibraryDecks } from '../../services/api';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
 const DECK_FILTER_OPTIONS = [
   { label: 'Tất cả', value: 'all' },
@@ -136,7 +137,10 @@ export default function LibraryScreen() {
                         <Ionicons name="albums-outline" size={24} color={isDark ? '#38bdf8' : '#0284c7'} />
                       </View>
                       <View style={styles.itemInfo}>
-                        <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                        <View style={styles.itemTitleRow}>
+                          <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{deck.name}</Text>
+                          {isPlusDeck(deck) ? <PlusDeckBadge compact /> : null}
+                        </View>
                         <Text style={[styles.itemSubtitle, { color: theme.textMuted }]}>
                           {deck._isCloned ? 'Sao chép' : (deck._isOwned ? 'Đã tạo' : 'Đã học')} • {deck.cardCount || 0} thuật ngữ
                         </Text>
@@ -303,10 +307,16 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   itemTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
+    flex: 1,
   },
   itemSubtitle: {
     fontSize: 14,

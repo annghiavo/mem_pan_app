@@ -6,8 +6,9 @@ import { WebContainer } from '../../components/ui/WebContainer';
 import { useThemeColor } from '../../hooks/use-theme-color';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { getUserPublicProfile, getPublicDecks, getPublicFolders } from '../../services/api';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
-type Deck = { deckId: string; name: string; description?: string; cardCount?: number };
+type Deck = { deckId: string; name: string; description?: string; cardCount?: number; accessLevel?: string; access_level?: string };
 type Folder = { folderId: string; name: string; description?: string };
 
 export default function UserProfileScreen() {
@@ -149,7 +150,10 @@ export default function UserProfileScreen() {
                                             style={[styles.deckCard, { backgroundColor: '#fff', borderColor: '#e5e7eb' }]}
                                             onPress={() => router.push(`/module/${d.deckId}` as any)}
                                         >
-                                            <Text style={[styles.deckTitle, { color: textColor }]} numberOfLines={1}>{d.name}</Text>
+                                            <View style={styles.deckTitleRow}>
+                                                <Text style={[styles.deckTitle, { color: textColor }]} numberOfLines={1}>{d.name}</Text>
+                                                {isPlusDeck(d) ? <PlusDeckBadge compact /> : null}
+                                            </View>
                                             {d.description ? (
                                                 <Text style={[styles.deckDescription, { color: muteColor }]} numberOfLines={2}>{d.description}</Text>
                                             ) : null}
@@ -301,6 +305,12 @@ const styles = StyleSheet.create({
     deckTitle: {
         fontSize: 18,
         fontWeight: 'bold',
+        flex: 1,
+    },
+    deckTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
         marginBottom: 8,
     },
     deckTermsCount: {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, useColorScheme, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, useColorScheme, TextInput, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getCreatorProfile, upsertCreatorProfile, getCurrentUser } from '../../services/api';
@@ -20,6 +20,7 @@ export default function CreatorDashboardScreen() {
 
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const isWeb = Platform.OS === 'web';
 
     const theme = {
         background: isDark ? '#111111' : '#f8f9fa',
@@ -63,9 +64,7 @@ export default function CreatorDashboardScreen() {
             await upsertCreatorProfile({
                 displayName,
                 bio,
-                bankName,
-                bankAccountNumber,
-                bankAccountName
+                ...(isWeb ? { bankName, bankAccountNumber, bankAccountName } : {})
             });
             Alert.alert('Thành công', 'Đã lưu hồ sơ Creator');
             fetchProfile();
@@ -124,30 +123,41 @@ export default function CreatorDashboardScreen() {
                             numberOfLines={4}
                         />
 
-                        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Thông tin nhận tiền (Payout)</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                            placeholder="Ngân hàng (vd: Vietcombank)"
-                            placeholderTextColor={theme.textMuted}
-                            value={bankName}
-                            onChangeText={setBankName}
-                        />
-                        <TextInput
-                            style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                            placeholder="Số tài khoản"
-                            placeholderTextColor={theme.textMuted}
-                            value={bankAccountNumber}
-                            onChangeText={setBankAccountNumber}
-                            keyboardType="numeric"
-                        />
-                        <TextInput
-                            style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                            placeholder="Tên chủ tài khoản"
-                            placeholderTextColor={theme.textMuted}
-                            value={bankAccountName}
-                            onChangeText={setBankAccountName}
-                            autoCapitalize="characters"
-                        />
+                        {isWeb ? (
+                            <>
+                                <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Thông tin nhận tiền (Payout)</Text>
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                                    placeholder="Ngân hàng (vd: Vietcombank)"
+                                    placeholderTextColor={theme.textMuted}
+                                    value={bankName}
+                                    onChangeText={setBankName}
+                                />
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                                    placeholder="Số tài khoản"
+                                    placeholderTextColor={theme.textMuted}
+                                    value={bankAccountNumber}
+                                    onChangeText={setBankAccountNumber}
+                                    keyboardType="numeric"
+                                />
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                                    placeholder="Tên chủ tài khoản"
+                                    placeholderTextColor={theme.textMuted}
+                                    value={bankAccountName}
+                                    onChangeText={setBankAccountName}
+                                    autoCapitalize="characters"
+                                />
+                            </>
+                        ) : (
+                            <View style={[styles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                                <Ionicons name="globe-outline" size={22} color={theme.primary} />
+                                <Text style={[styles.noticeText, { color: theme.textMuted }]}>
+                                    Cài đặt nhận tiền và rút tiền chỉ khả dụng trên phiên bản web.
+                                </Text>
+                            </View>
+                        )}
                         
                         <View style={{ height: 40 }} />
                     </ScrollView>
@@ -172,4 +182,6 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
     input: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 12, fontSize: 16 },
     textArea: { height: 100, textAlignVertical: 'top' },
+    noticeCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderRadius: 12, borderWidth: 1, marginTop: 24 },
+    noticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
 });

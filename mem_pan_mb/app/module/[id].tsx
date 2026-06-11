@@ -2,14 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser, upsertDeckReview } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, updateDeckAccessLevel, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser, upsertDeckReview, getMySubscription, normalizeSubscription, isPlusAccessError, PLUS_REQUIRED_MESSAGE } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import Papa from 'papaparse';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { formatNextReview } from '../../utils/timeFormatting';
+import { PlusDeckBadge, isPlusDeck as isPlusDeckRecord } from '../../components/ui/PlusDeckBadge';
 
 // Build a shareable URL for a deck. On web we use the current origin so the
 // link is directly visitable; on native we fall back to a deep link.
@@ -58,6 +59,7 @@ export default function ModuleDetailScreen() {
   const [cards, setCards] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
   const [dueCount, setDueCount] = useState<number>(0);
+  const [hasPlus, setHasPlus] = useState(false);
   const [creatorUsername, setCreatorUsername] = useState<string>('');
   const [creatorAvatar, setCreatorAvatar] = useState<string>('');
   const [currentUsername, setCurrentUsername] = useState<string>('');
@@ -75,6 +77,18 @@ export default function ModuleDetailScreen() {
     if (!creatorUsername) return true;
     return creatorUsername === currentUsername;
   })();
+  const isPlusDeck = isPlusDeckRecord(deckData);
+
+  const navigateToLearning = (route: string) => {
+    if (isPlusDeck && !hasPlus) {
+      Alert.alert(
+        'Cần MemPan Plus',
+        PLUS_REQUIRED_MESSAGE
+      );
+      return;
+    }
+    router.push(route as any);
+  };
 
   // Modal States
   const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -87,6 +101,9 @@ export default function ModuleDetailScreen() {
 
   // Visibility Picker
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+
+  // Access Level Picker
+  const [showAccessLevelModal, setShowAccessLevelModal] = useState(false);
 
   // Card Edit States
   const [showCardEditModal, setShowCardEditModal] = useState(false);
@@ -104,12 +121,16 @@ export default function ModuleDetailScreen() {
     useCallback(() => {
       const fetchDeckData = async () => {
         try {
-          const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
+          const [deckRes, cardsRes, progressRes, dueRes, meRes, subscriptionRes] = await Promise.all([
             getDeck(id as string),
-            getDeckCards(id as string),
+            getDeckCards(id as string).catch((error) => {
+              if (isPlusAccessError(error)) return { cards: [] };
+              throw error;
+            }),
             getDeckProgress(id as string).catch(() => null),
             getDueCards(id as string).catch(() => ({ total: 0 })),
-            getCurrentUser().catch(() => null),
+            getCurrentUser(true).catch(() => null),
+            getMySubscription(true).catch(() => null),
           ]);
           setDeckData(deckRes.deck);
           setCreatorUsername(deckRes.creatorUsername || '');
@@ -119,6 +140,8 @@ export default function ModuleDetailScreen() {
           setDueCount(dueRes?.total || 0);
           const me = meRes?.user || meRes?.data || meRes;
           if (me?.username) setCurrentUsername(me.username);
+          const subscription = normalizeSubscription(subscriptionRes);
+          setHasPlus(Boolean(subscription?.active || subscription?.status === 'active'));
         } catch (error) {
           console.error('Error fetching deck:', error);
         } finally {
@@ -240,10 +263,10 @@ export default function ModuleDetailScreen() {
         'Định nghĩa': c.contentBack
       })));
       const fileName = `${deckData.name.replace(/[^a-zA-Z0-9]/g, '_')}_cards.csv`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      const file = new File(Paths.document, fileName);
+      file.write(csv, { encoding: 'utf8' });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { UTI: 'public.comma-separated-values-text', mimeType: 'text/csv', dialogTitle: 'Xuất CSV' });
+        await Sharing.shareAsync(file.uri, { UTI: 'public.comma-separated-values-text', mimeType: 'text/csv', dialogTitle: 'Xuất CSV' });
       } else {
         Alert.alert('Chia sẻ không khả dụng', 'Tính năng chia sẻ không hoạt động trên thiết bị này.');
       }
@@ -306,6 +329,23 @@ export default function ModuleDetailScreen() {
   const handleChangeVisibility = () => {
     setShowOptionsModal(false);
     setShowVisibilityModal(true);
+  };
+
+  const applyAccessLevel = async (level: 'free' | 'plus') => {
+    setShowAccessLevelModal(false);
+    if ((deckData?.accessLevel || deckData?.access_level || 'free') === level) return;
+    try {
+      const res = await updateDeckAccessLevel(id as string, level);
+      setDeckData({ ...deckData, ...(res?.deck || { accessLevel: level }) });
+      Alert.alert('Thành công', level === 'plus' ? 'Học phần đã được nâng cấp Plus' : 'Học phần đã chuyển về Miễn phí');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật gói học phần');
+    }
+  };
+
+  const handleChangeAccessLevel = () => {
+    setShowOptionsModal(false);
+    setShowAccessLevelModal(true);
   };
 
   const handleOpenCardEdit = (card: any) => {
@@ -407,6 +447,10 @@ export default function ModuleDetailScreen() {
     );
   }
 
+  const showPlusPurchasePrompt = isPlusDeck && !hasPlus;
+  const learningActionsDisabled = cards.length === 0 && !showPlusPurchasePrompt;
+  const learningActionsMuted = cards.length === 0 && !showPlusPurchasePrompt;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
@@ -429,10 +473,17 @@ export default function ModuleDetailScreen() {
         {cards.length > 0 ? (
           <TouchableOpacity
             style={[styles.flashcardPreview, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
-            onPress={() => router.push(`/flashcard/${id}` as any)}
+            onPress={() => navigateToLearning(`/flashcard/${id}`)}
           >
             <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
             <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} />
+          </TouchableOpacity>
+        ) : showPlusPurchasePrompt ? (
+          <TouchableOpacity
+            style={[styles.flashcardPreview, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}
+            onPress={() => navigateToLearning(`/flashcard/${id}`)}
+          >
+            <Text style={[styles.flashcardWord, { color: theme.text, textAlign: 'center' }]}>{PLUS_REQUIRED_MESSAGE}</Text>
           </TouchableOpacity>
         ) : (
           <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]}>
@@ -441,7 +492,10 @@ export default function ModuleDetailScreen() {
         )}
 
         {/* Module Info */}
-        <Text style={[styles.moduleTitle, { color: theme.text }]}>{deckData.name}</Text>
+        <View style={styles.moduleTitleRow}>
+          <Text style={[styles.moduleTitle, { color: theme.text }]}>{deckData.name}</Text>
+          {isPlusDeck ? <PlusDeckBadge /> : null}
+        </View>
         {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted }]}>{deckData.description}</Text> : null}
 
         <View style={styles.authorContainer}>
@@ -459,12 +513,6 @@ export default function ModuleDetailScreen() {
 
         {/* Deck Info: Rating & Access Level */}
         <View style={styles.deckStatsContainer}>
-          {deckData.accessLevel === 'plus' && (
-             <View style={[styles.badge, { backgroundColor: '#f59e0b' }]}>
-               <Ionicons name="star" size={14} color="#fff" />
-               <Text style={styles.badgeText}>Plus</Text>
-             </View>
-          )}
           <TouchableOpacity style={styles.ratingBadge} onPress={() => setShowRatingModal(true)}>
              <Ionicons name="star" size={16} color="#f59e0b" />
              <Text style={[styles.ratingText, { color: theme.text }]}>
@@ -476,17 +524,17 @@ export default function ModuleDetailScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
-          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/flashcard/${id}` as any)} disabled={cards.length === 0}>
-            <Ionicons name="albums" size={24} color={cards.length > 0 ? "#3b82f6" : theme.textMuted} />
-            <Text style={[styles.actionButtonText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Flashcard</Text>
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => navigateToLearning(`/flashcard/${id}`)} disabled={learningActionsDisabled}>
+            <Ionicons name="albums" size={24} color={!learningActionsMuted ? "#3b82f6" : theme.textMuted} />
+            <Text style={[styles.actionButtonText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Flashcard</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}` as any)} disabled={cards.length === 0}>
-            <Ionicons name="refresh-circle" size={24} color={cards.length > 0 ? "#8b5cf6" : theme.textMuted} />
-            <Text style={[styles.actionButtonText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Câu hỏi ôn tập</Text>
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => navigateToLearning(`/quiz/${id}`)} disabled={learningActionsDisabled}>
+            <Ionicons name="refresh-circle" size={24} color={!learningActionsMuted ? "#8b5cf6" : theme.textMuted} />
+            <Text style={[styles.actionButtonText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Câu hỏi ôn tập</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/practice-setup/${id}` as any)} disabled={cards.length === 0}>
-            <Ionicons name="document-text" size={24} color={cards.length > 0 ? "#10b981" : theme.textMuted} />
-            <Text style={[styles.actionButtonText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Bài kiểm tra</Text>
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => navigateToLearning(`/practice-setup/${id}`)} disabled={learningActionsDisabled}>
+            <Ionicons name="document-text" size={24} color={!learningActionsMuted ? "#10b981" : theme.textMuted} />
+            <Text style={[styles.actionButtonText, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>Bài kiểm tra</Text>
           </TouchableOpacity>
         </View>
 
@@ -510,21 +558,21 @@ export default function ModuleDetailScreen() {
           );
         })()}
         <View style={styles.progressStats}>
-          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)} disabled={cards.length === 0}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => navigateToLearning(`/quiz/${id}?filterState=new`)} disabled={learningActionsDisabled}>
             <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
               <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount ?? 0}</Text>
             </View>
             <Text style={[styles.statLabel, { color: theme.text }]}>Chưa học</Text>
             <Ionicons name="arrow-forward" size={20} color="#5865F2" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)} disabled={cards.length === 0}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }]} onPress={() => navigateToLearning(`/quiz/${id}?filterState=studying`)} disabled={learningActionsDisabled}>
             <View style={[styles.statRing, { borderColor: '#f59e0b', borderRightColor: isDark ? '#3f3f46' : '#f3f4f6' }]}>
               <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.learnCount ?? 0}</Text>
             </View>
             <Text style={[styles.statLabel, { color: theme.text }]}>Đang học</Text>
             <Ionicons name="arrow-forward" size={20} color="#f59e0b" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => router.push(`/quiz/${id}?filterState=memorized` as any)} disabled={(progress?.memorizedCount ?? 0) === 0}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: theme.surface, shadowColor: isDark ? 'transparent' : '#000' }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => navigateToLearning(`/quiz/${id}?filterState=memorized`)} disabled={(progress?.memorizedCount ?? 0) === 0}>
             <View style={[styles.statRing, { borderColor: '#10b981' }]}>
               <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.memorizedCount ?? 0}</Text>
             </View>
@@ -597,6 +645,13 @@ export default function ModuleDetailScreen() {
                 <Text style={[styles.optionValue, { color: theme.primary }]}>{deckData.isPublic ? 'Mọi người' : 'Chỉ tôi'}</Text>
               </TouchableOpacity>
             )}
+            {isOwner && (
+              <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleChangeAccessLevel}>
+                <Ionicons name={isPlusDeck ? 'star' : 'star-outline'} size={24} color={theme.textMuted} />
+                <Text style={[styles.optionText, { color: theme.text }]}>Loại học phần</Text>
+                <Text style={[styles.optionValue, { color: isPlusDeck ? '#f59e0b' : theme.primary }]}>{isPlusDeck ? 'Plus' : 'Miễn phí'}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={handleCloneDeck}>
               <Ionicons name="copy-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Sao chép học phần</Text>
@@ -645,6 +700,26 @@ export default function ModuleDetailScreen() {
               <Ionicons name="lock-closed-outline" size={24} color={theme.textMuted} />
               <Text style={[styles.optionText, { color: theme.text }]}>Chỉ tôi</Text>
               {!deckData.isPublic ? <Ionicons name="checkmark" size={22} color={theme.primary} /> : null}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Access Level Picker Modal */}
+      <Modal visible={showAccessLevelModal} transparent={true} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccessLevelModal(false)}>
+          <View style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+            <View style={[styles.bottomSheetHandle, { backgroundColor: theme.border }]} />
+            <Text style={[styles.visibilityTitle, { color: theme.textMuted }]}>Loại học phần</Text>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => applyAccessLevel('free')}>
+              <Ionicons name="star-outline" size={24} color={theme.textMuted} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Miễn phí</Text>
+              {!isPlusDeck ? <Ionicons name="checkmark" size={22} color={theme.primary} /> : null}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionItem, { borderBottomColor: theme.border }]} onPress={() => applyAccessLevel('plus')}>
+              <Ionicons name="star" size={24} color="#f59e0b" />
+              <Text style={[styles.optionText, { color: theme.text }]}>Plus</Text>
+              {isPlusDeck ? <Ionicons name="checkmark" size={22} color={theme.primary} /> : null}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -816,7 +891,8 @@ const styles = StyleSheet.create({
   flashcardPreview: { height: 220, borderRadius: 16, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, marginBottom: 24, position: 'relative' },
   flashcardWord: { fontSize: 28, fontWeight: '500', textAlign: 'center', paddingHorizontal: 20 },
   fullscreenIcon: { position: 'absolute', bottom: 16, right: 16 },
-  moduleTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  moduleTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  moduleTitle: { fontSize: 24, fontWeight: 'bold', flexShrink: 1 },
   moduleDesc: { fontSize: 16, marginBottom: 12 },
   authorContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   authorAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', marginRight: 8 },

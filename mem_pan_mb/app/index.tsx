@@ -23,7 +23,6 @@ export default function Index() {
         }
         
         if (token) {
-          // If token exists, go to main app
           router.replace('/(tabs)');
         } else {
           // Otherwise, go to login
@@ -36,7 +35,7 @@ export default function Index() {
     };
 
     checkAuth();
-  }, []);
+  }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
