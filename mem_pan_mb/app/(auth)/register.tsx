@@ -58,7 +58,7 @@ export default function RegisterScreen() {
       logResponse('POST', url, response.status, data);
 
       if (response.ok) {
-        showAlert('Thành công', 'Đăng ký tài khoản thành công!', () => router.replace('/(auth)/login' as any));
+        showAlert('Thành công', 'Đăng ký tài khoản thành công! Vui lòng kiểm tra email của bạn để xác thực tài khoản trước khi đăng nhập.', () => router.replace('/(auth)/login' as any));
       } else {
         showAlert('Lỗi đăng ký', data.message || 'Có lỗi xảy ra, vui lòng thử lại.');
       }

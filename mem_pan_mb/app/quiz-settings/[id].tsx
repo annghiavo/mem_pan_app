@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
   ScrollView, Switch, ActivityIndicator, Modal, useColorScheme, Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -92,6 +93,8 @@ export default function QuizSettingsScreen() {
             questionTypeWritten: s.questionTypeWritten ?? defaultStudySettings.questionTypeWritten,
             strictnessLevel: s.strictnessLevel ?? defaultStudySettings.strictnessLevel,
             requireRetypingCorrectAnswer: s.requireRetypingCorrectAnswer ?? defaultStudySettings.requireRetypingCorrectAnswer,
+            newCardLimit: s.newCardLimit ?? defaultStudySettings.newCardLimit,
+            reviewCardLimit: s.reviewCardLimit ?? defaultStudySettings.reviewCardLimit,
           });
         }
       } catch (err) {
@@ -127,13 +130,14 @@ export default function QuizSettingsScreen() {
   };
 
   const handleToggleQuestionType = (
-    field: 'questionTypeMultipleChoice' | 'questionTypeWritten',
+    field: 'questionTypeMultipleChoice' | 'questionTypeWritten' | 'questionTypeFlashcards',
     val: boolean,
   ) => {
-    const { questionTypeMultipleChoice: mc, questionTypeWritten: w } = settings;
+    const { questionTypeMultipleChoice: mc, questionTypeWritten: w, questionTypeFlashcards: fc } = settings;
     const counts = [
       field === 'questionTypeMultipleChoice' ? val : mc,
       field === 'questionTypeWritten' ? val : w,
+      field === 'questionTypeFlashcards' ? val : fc,
     ].filter(Boolean).length;
     if (counts === 0) return; // at least one must remain on
     update({ [field]: val });
@@ -226,6 +230,15 @@ export default function QuizSettingsScreen() {
         {/* ─── Loại câu hỏi ─── */}
         <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>LOẠI CÂU HỎI</Text>
         <View style={[styles.section, { borderColor: theme.border }]}>
+          <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
+            <Text style={[styles.label, { color: theme.text }]}>Thẻ ghi nhớ</Text>
+            <Switch
+              value={settings.questionTypeFlashcards}
+              onValueChange={v => handleToggleQuestionType('questionTypeFlashcards', v)}
+              trackColor={{ false: '#d1d5db', true: theme.primary }}
+              thumbColor="#ffffff"
+            />
+          </View>
 
           <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
             <Text style={[styles.label, { color: theme.text }]}>Nhiều lựa chọn</Text>
@@ -282,6 +295,78 @@ export default function QuizSettingsScreen() {
               trackColor={{ false: '#d1d5db', true: theme.primary }}
               thumbColor="#ffffff"
             />
+          </View>
+        </View>
+
+        {/* ─── Giới hạn hằng ngày ─── */}
+        <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>GIỚI HẠN HẰNG NGÀY</Text>
+        <View style={[styles.section, { borderColor: theme.border }]}>
+          {/* Học mới */}
+          <View style={[styles.row, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
+            <View style={styles.labelGroup}>
+              <Text style={[styles.label, { color: theme.text }]}>Giới hạn học mới</Text>
+              <Text style={[styles.subLabel, { color: theme.textMuted }]}>
+                Số lượng thẻ mới tối đa học mỗi ngày
+              </Text>
+            </View>
+            <View style={styles.limitControl}>
+              <TouchableOpacity
+                style={[styles.limitButton, { backgroundColor: theme.surfaceAlt }]}
+                onPress={() => update({ newCardLimit: Math.max(0, settings.newCardLimit - 5) })}
+              >
+                <Ionicons name="remove" size={20} color={theme.iconColor} />
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.limitInput, { color: theme.text, borderColor: theme.border }]}
+                value={String(settings.newCardLimit)}
+                onChangeText={(text) => {
+                  const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                  update({ newCardLimit: isNaN(val) ? 0 : val });
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus
+              />
+              <TouchableOpacity
+                style={[styles.limitButton, { backgroundColor: theme.surfaceAlt }]}
+                onPress={() => update({ newCardLimit: settings.newCardLimit + 5 })}
+              >
+                <Ionicons name="add" size={20} color={theme.iconColor} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Ôn tập */}
+          <View style={styles.row}>
+            <View style={styles.labelGroup}>
+              <Text style={[styles.label, { color: theme.text }]}>Giới hạn ôn tập</Text>
+              <Text style={[styles.subLabel, { color: theme.textMuted }]}>
+                Số lượng thẻ ôn tập tối đa mỗi ngày
+              </Text>
+            </View>
+            <View style={styles.limitControl}>
+              <TouchableOpacity
+                style={[styles.limitButton, { backgroundColor: theme.surfaceAlt }]}
+                onPress={() => update({ reviewCardLimit: Math.max(0, settings.reviewCardLimit - 10) })}
+              >
+                <Ionicons name="remove" size={20} color={theme.iconColor} />
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.limitInput, { color: theme.text, borderColor: theme.border }]}
+                value={String(settings.reviewCardLimit)}
+                onChangeText={(text) => {
+                  const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                  update({ reviewCardLimit: isNaN(val) ? 0 : val });
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus
+              />
+              <TouchableOpacity
+                style={[styles.limitButton, { backgroundColor: theme.surfaceAlt }]}
+                onPress={() => update({ reviewCardLimit: settings.reviewCardLimit + 10 })}
+              >
+                <Ionicons name="add" size={20} color={theme.iconColor} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         </WebContainer>
@@ -428,4 +513,26 @@ const styles = StyleSheet.create({
   pickerOptionContent: { flex: 1, marginRight: 8 },
   pickerOptionTitle: { fontSize: 17, fontWeight: '600', marginBottom: 2 },
   pickerOptionDesc: { fontSize: 13 },
+  limitControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  limitButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  limitInput: {
+    width: 60,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginHorizontal: 8,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+    padding: 0,
+  },
 });

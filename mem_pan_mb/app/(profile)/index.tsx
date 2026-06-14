@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, useColorScheme, Image } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, useColorScheme, Image, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentUser } from '../../services/api';
+import { getCurrentUser, getMySubscription, normalizeSubscription } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
 
 export default function ProfileScreen() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
+    const [subscription, setSubscription] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
@@ -30,9 +31,13 @@ export default function ProfileScreen() {
     const fetchUser = async () => {
         try {
             setLoading(true);
-            const data = await getCurrentUser();
+            const [data, subData] = await Promise.all([
+                getCurrentUser(),
+                getMySubscription(true).catch(() => null)
+            ]);
             const userData = data.user || data.data || data;
             setUser(userData);
+            setSubscription(normalizeSubscription(subData));
         } catch (error) {
             console.error('Failed to fetch user', error);
         } finally {
@@ -86,11 +91,55 @@ export default function ProfileScreen() {
                                     </View>
                                 )}
                             </View>
-                            <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text style={[styles.avatarName, { color: theme.text }]}>{user?.username || 'Người dùng'}</Text>
+                                {(subscription?.active || subscription?.status === 'active') && (
+                                    <View style={styles.plusBadge}>
+                                        <Text style={styles.plusBadgeText}>Plus</Text>
+                                    </View>
+                                )}
+                            </View>
                             <Text style={[styles.avatarEmail, { color: theme.textMuted }]}>{user?.email || ''}</Text>
                         </View>
 
+                        {/* Subscription Info Card */}
+                        <View style={[styles.subCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                            <View style={styles.subCardHeader}>
+                                <Ionicons 
+                                    name="star" 
+                                    size={20} 
+                                    color={subscription?.active || subscription?.status === 'active' ? '#f59e0b' : theme.textMuted} 
+                                    style={{ marginRight: 8 }}
+                                />
+                                <Text style={[styles.subCardTitle, { color: theme.text }]}>
+                                    {subscription?.active || subscription?.status === 'active' ? 'Thành viên MemPan Plus' : 'Tài khoản Miễn phí'}
+                                </Text>
+                            </View>
+                            
+                            {subscription?.active || subscription?.status === 'active' ? (
+                                <View style={styles.subCardDetails}>
+                                    <Text style={[styles.subCardLabel, { color: theme.textMuted }]}>
+                                        Hiệu lực đến: <Text style={{ color: theme.text, fontWeight: '600' }}>{new Date(subscription.currentPeriodEnd || subscription.current_period_end).toLocaleDateString('vi-VN')}</Text>
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.subCardDetails}>
+                                    <Text style={[styles.subCardLabel, { color: theme.textMuted }]}>
+                                        Nâng cấp để học không giới hạn các học phần cao cấp.
+                                    </Text>
+                                    <TouchableOpacity 
+                                        style={[styles.upgradeButton, { backgroundColor: '#f59e0b' }]}
+                                        onPress={() => router.push('/(profile)/plus' as any)}
+                                    >
+                                        <Text style={styles.upgradeButtonText}>Nâng cấp ngay</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+
                         <View style={styles.menuContainer}>
+                            {renderMenuItem('Gói Plus', 'star', () => router.push('/(profile)/plus' as any))}
+                            {renderMenuItem('Creator Dashboard', 'podium-outline', () => router.push('/(profile)/creator' as any))}
                             {renderMenuItem('Thành tựu', 'trophy-outline', () => router.push('/(profile)/achievements' as any))}
                             {renderMenuItem('Cài đặt', 'settings-outline', () => router.push('/(profile)/settings' as any))}
                         </View>
@@ -176,6 +225,54 @@ const styles = StyleSheet.create({
     },
     avatarEmail: {
         fontSize: 16,
+    },
+    plusBadge: {
+        backgroundColor: '#f59e0b',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+        marginLeft: 8,
+        marginBottom: 4,
+    },
+    plusBadgeText: {
+        color: '#ffffff',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    subCard: {
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginHorizontal: 16,
+        marginBottom: 20,
+    },
+    subCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    subCardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    subCardDetails: {
+        marginTop: 4,
+    },
+    subCardLabel: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    upgradeButton: {
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        alignItems: 'center',
+    },
+    upgradeButtonText: {
+        color: '#ffffff',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     menuContainer: {
         marginTop: 8,

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Switch, ActivityIndicator, Modal, FlatList, Alert, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getDeck, getDeckCards } from '../../services/api';
+import { getDeck, getDeckCards, isPlusAccessError, PLUS_REQUIRED_MESSAGE } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
 
 const langNameMap: Record<string, string> = {
@@ -42,6 +42,7 @@ export default function PracticeSetupScreen() {
   const [loading, setLoading] = useState(true);
   const [deck, setDeck] = useState<any>(null);
   const [totalCards, setTotalCards] = useState(0);
+  const [plusAccessRequired, setPlusAccessRequired] = useState(false);
 
   const [numQuestions, setNumQuestions] = useState(5);
   const [showAnswerImmed, setShowAnswerImmed] = useState(false);
@@ -61,11 +62,10 @@ export default function PracticeSetupScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [deckRes, cardsRes] = await Promise.all([
-          getDeck(deckId),
-          getDeckCards(deckId),
-        ]);
+        setPlusAccessRequired(false);
+        const deckRes = await getDeck(deckId);
         setDeck(deckRes.deck);
+        const cardsRes = await getDeckCards(deckId);
         const cardsList = cardsRes.cards || [];
         const count = cardsList.length;
         setTotalCards(count);
@@ -80,7 +80,11 @@ export default function PracticeSetupScreen() {
           setLangBackLabel(bl);
         }
       } catch (err) {
-        console.error('Error fetching deck:', err);
+        if (isPlusAccessError(err)) {
+          setPlusAccessRequired(true);
+        } else {
+          console.error('Error fetching deck:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -130,6 +134,17 @@ export default function PracticeSetupScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={theme.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (plusAccessRequired) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }]}>
+        <Text style={{ color: theme.text, fontSize: 18, textAlign: 'center', marginBottom: 16 }}>{PLUS_REQUIRED_MESSAGE}</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={{ color: theme.primary, fontWeight: '700' }}>Quay lại</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }

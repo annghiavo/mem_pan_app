@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useRouter } from 'expo-router';
 import { WebContainer } from '@/components/ui/WebContainer';
+import { PlusDeckBadge, isPlusDeck } from '@/components/ui/PlusDeckBadge';
 
 const TABS = ['Bộ thẻ', 'Người dùng'];
 
@@ -58,7 +59,10 @@ export default function SearchScreen() {
             return (
                 <TouchableOpacity onPress={() => router.push(`/module/${item.deckId}` as any)}>
                     <ThemedView style={styles.card}>
-                        <ThemedText style={styles.title}>{item.name}</ThemedText>
+                        <View style={styles.deckTitleRow}>
+                            <ThemedText style={styles.title} numberOfLines={1}>{item.name}</ThemedText>
+                            {isPlusDeck(item) ? <PlusDeckBadge compact /> : null}
+                        </View>
                         {item.description ? <ThemedText style={styles.desc} numberOfLines={2}>{item.description}</ThemedText> : null}
                         <ThemedText style={styles.meta}>{item.cardCount || 0} thẻ</ThemedText>
                         {item.creatorUsername ? <ThemedText style={styles.meta}>Tác giả: {item.creatorUsername}</ThemedText> : null}
@@ -175,6 +179,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: 'bold',
+        flex: 1,
+    },
+    deckTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
         marginBottom: 4,
     },
     desc: {

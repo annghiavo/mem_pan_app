@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, SafeAreaView, ActivityIndicator, Modal, TextInput, Alert, useColorScheme, Image, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser } from '../../services/api';
+import { getDeck, getDeckCards, getDeckProgress, getDueCards, deleteDeck, updateDeck, updateDeckVisibility, getFolders, addDeckToFolder, deleteCard, updateCard, cloneDeck, getCurrentUser, upsertDeckReview, isPlusAccessError, PLUS_REQUIRED_MESSAGE, getDeckStudySettings, getMySubscription, normalizeSubscription } from '../../services/api';
 import { devlog } from '../../services/devlog';
 import Papa from 'papaparse';
 import { ReportSheet } from '../../components/ui/ReportSheet';
 import { formatNextReview } from '../../utils/timeFormatting';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
+import { SearchBar } from '../../components/ui/SearchBar';
 
 function buildDeckShareUrl(deckId: string): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
@@ -15,8 +17,13 @@ function buildDeckShareUrl(deckId: string): string {
   return `/module/${deckId}`;
 }
 
+function getPreviewCardLimit(totalCards: number): number {
+  if (totalCards <= 0) return 0;
+  return Math.min(totalCards, Math.max(10, Math.ceil(totalCards * 0.1)));
+}
+
 // Reusable hoverable wrapper
-function HoverableCard({ children, style, onPress, theme, disabled }: any) {
+function HoverableCard({ children, style, onPress, theme, disabled, ...rest }: any) {
   const [isHovered, setIsHovered] = useState(false);
   return (
     <TouchableOpacity
@@ -32,6 +39,7 @@ function HoverableCard({ children, style, onPress, theme, disabled }: any) {
         { cursor: disabled ? 'default' : 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' } as any,
         (isHovered && !disabled) && { transform: [{ translateY: -2 }], boxShadow: `0 6px 12px ${theme.shadowColor}15` }
       ]}
+      {...rest}
     >
       {children}
     </TouchableOpacity>
@@ -78,8 +86,12 @@ export default function ModuleDetailWebScreen() {
 
   const [deckData, setDeckData] = useState<any>(null);
   const [cards, setCards] = useState<any[]>([]);
+  const [cardSearchQuery, setCardSearchQuery] = useState('');
+  const [cardsAccessBlocked, setCardsAccessBlocked] = useState(false);
+  const [hasPlus, setHasPlus] = useState(false);
   const [progress, setProgress] = useState<any>(null);
   const [dueCount, setDueCount] = useState<number>(0);
+  const [studySettings, setStudySettings] = useState<any>(null);
   // Re-render the next-review countdown over time; the label is derived from
   // the server's absolute timestamp, this tick just forces a recompute.
   const [nowTick, setNowTick] = useState(Date.now());
@@ -95,12 +107,17 @@ export default function ModuleDetailWebScreen() {
     if (!creatorUsername) return true;
     return creatorUsername === currentUsername;
   })();
+  const deckIsPlus = isPlusDeck(deckData);
 
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFolderSelectModal, setShowFolderSelectModal] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [myRating, setMyRating] = useState(0);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [hasRatedDeck, setHasRatedDeck] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [folders, setFolders] = useState<any[]>([]);
@@ -118,12 +135,21 @@ export default function ModuleDetailWebScreen() {
       devlog.event('module:mount', { deckId: id });
       const fetchDeckData = async () => {
         try {
-          const [deckRes, cardsRes, progressRes, dueRes, meRes] = await Promise.all([
+          setCardsAccessBlocked(false);
+          const [deckRes, cardsRes, progressRes, dueRes, meRes, settingsRes, subscriptionRes] = await Promise.all([
             getDeck(id as string),
-            getDeckCards(id as string),
+            getDeckCards(id as string).catch((error) => {
+              if (isPlusAccessError(error)) {
+                setCardsAccessBlocked(true);
+                return { cards: [] };
+              }
+              throw error;
+            }),
             getDeckProgress(id as string).catch((e) => { devlog.warn('module: getDeckProgress failed', { error: String(e?.message ?? e) }); return null; }),
             getDueCards(id as string).catch((e) => { devlog.warn('module: getDueCards failed', { error: String(e?.message ?? e) }); return { total: 0 }; }),
             getCurrentUser().catch(() => null),
+            getDeckStudySettings(id as string).catch(() => null),
+            getMySubscription(true).catch(() => null),
           ]);
           setDeckData(deckRes.deck);
           setCreatorUsername(deckRes.creatorUsername || '');
@@ -131,8 +157,11 @@ export default function ModuleDetailWebScreen() {
           setCards(cardsRes.cards || []);
           setProgress(progressRes);
           setDueCount(dueRes?.total || 0);
+          setStudySettings(settingsRes?.settings || null);
           const me = meRes?.user || meRes?.data || meRes;
           if (me?.username) setCurrentUsername(me.username);
+          const subscription = normalizeSubscription(subscriptionRes);
+          setHasPlus(Boolean(subscription?.active || subscription?.status === 'active'));
           devlog.info('module: deck loaded', { deckId: id, cardCount: cardsRes.cards?.length ?? 0, dueCount: dueRes?.total ?? 0 });
         } catch (error) {
           devlog.error('module: failed to load deck', error, { deckId: id });
@@ -148,6 +177,16 @@ export default function ModuleDetailWebScreen() {
     const t = setInterval(() => setNowTick(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  const filteredCards = useMemo(() => {
+    const query = cardSearchQuery.trim().toLowerCase();
+    if (!query) return cards;
+    return cards.filter((card) => {
+      const front = String(card.contentFront || '').toLowerCase();
+      const back = String(card.contentBack || '').toLowerCase();
+      return front.includes(query) || back.includes(query);
+    });
+  }, [cards, cardSearchQuery]);
 
   if (loading) {
     return (
@@ -217,6 +256,33 @@ export default function ModuleDetailWebScreen() {
       setShowFolderSelectModal(false);
       Alert.alert('Thành công', 'Đã thêm học phần vào thư mục');
     } catch (error: any) { }
+  };
+
+  const handleSubmitRating = async () => {
+    if (myRating < 1 || myRating > 5 || isSubmittingRating) return;
+    setIsSubmittingRating(true);
+    try {
+      const previousAvg = Number(deckData?.avgRating || 0);
+      const previousTotal = Number(deckData?.totalReviews || 0);
+      const response = await upsertDeckReview(id as string, myRating);
+      const updatedDeck = response?.deck;
+      setDeckData((prev: any) => {
+        if (!prev) return prev;
+        if (updatedDeck) return { ...prev, ...updatedDeck };
+        const nextTotal = hasRatedDeck ? previousTotal : previousTotal + 1;
+        const nextAvg = hasRatedDeck || previousTotal <= 0
+          ? myRating
+          : ((previousAvg * previousTotal) + myRating) / nextTotal;
+        return { ...prev, avgRating: nextAvg, totalReviews: nextTotal };
+      });
+      setHasRatedDeck(true);
+      setShowRatingModal(false);
+      Alert.alert('Thành công', 'Cảm ơn bạn đã đánh giá học phần!');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể gửi đánh giá.');
+    } finally {
+      setIsSubmittingRating(false);
+    }
   };
 
   const handleShareDeck = async () => {
@@ -397,6 +463,14 @@ export default function ModuleDetailWebScreen() {
     );
   }
 
+  const totalCardCount = Number(deckData?.cardCount || cards.length || 0);
+  const isPreviewMode = deckIsPlus && !hasPlus;
+  const previewCardLimit = getPreviewCardLimit(totalCardCount);
+  const previewLoadedCount = Math.min(cards.length, previewCardLimit);
+  const canStartLearning = !isPreviewMode && cards.length > 0;
+  const learningActionsDisabled = !canStartLearning;
+  const learningActionsMuted = !canStartLearning;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border, paddingHorizontal: isMobile ? 12 : 32 }]}>
@@ -416,7 +490,10 @@ export default function ModuleDetailWebScreen() {
 
           <View style={[styles.heroSection, { flexDirection: isMobile ? 'column' : 'row' }]}>
             <View style={[styles.heroLeft]}>
-              <Text style={[styles.moduleTitle, { color: theme.text, fontSize: isMobile ? 22 : 36 }]}>{deckData.name}</Text>
+              <View style={styles.moduleTitleRow}>
+                <Text style={[styles.moduleTitle, { color: theme.text, fontSize: isMobile ? 22 : 36 }]}>{deckData.name}</Text>
+                {deckIsPlus ? <PlusDeckBadge /> : null}
+              </View>
               {deckData.description ? <Text style={[styles.moduleDesc, { color: theme.textMuted, fontSize: isMobile ? 15 : 18 }]}>{deckData.description}</Text> : null}
 
               <View style={styles.authorContainer}>
@@ -429,32 +506,80 @@ export default function ModuleDetailWebScreen() {
                 )}
                 <Text style={[styles.authorName, { color: theme.text }]}>{creatorUsername || 'Bạn'}</Text>
                 <Ionicons name="checkmark-circle" size={16} color="#10b981" style={{ marginLeft: 4 }} />
-                <Text style={[styles.termCount, { color: theme.textMuted }]}> | {cards.length} thuật ngữ</Text>
+                <Text style={[styles.termCount, { color: theme.textMuted }]}> | {totalCardCount} thuật ngữ</Text>
               </View>
 
-              <View style={[styles.actionsGrid, { gap: isMobile ? 10 : 16 }]}>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
-                  <Ionicons name="albums" size={32} color={cards.length > 0 ? "#3b82f6" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Flashcard</Text>
-                </HoverableCard>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/quiz/${id}` as any)}>
-                  <Ionicons name="refresh-circle" size={32} color={cards.length > 0 ? "#8b5cf6" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Ôn tập</Text>
-                </HoverableCard>
-                <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/practice-setup/${id}` as any)}>
-                  <Ionicons name="document-text" size={32} color={cards.length > 0 ? "#10b981" : theme.textMuted} />
-                  <Text style={[styles.actionCardText, { color: theme.text }, cards.length === 0 && { color: theme.textMuted }]}>Kiểm tra</Text>
-                </HoverableCard>
+              <TouchableOpacity style={[styles.ratingPanel, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => setShowRatingModal(true)}>
+                <View style={styles.ratingSummary}>
+                  <Ionicons name="star" size={22} color="#f59e0b" />
+                  <Text style={[styles.ratingValue, { color: theme.text }]}>
+                    {typeof deckData.avgRating === 'number' ? deckData.avgRating.toFixed(1) : (deckData.avgRating || '0.0')}
+                  </Text>
+                  <Text style={[styles.ratingCount, { color: theme.textMuted }]}>({deckData.totalReviews || 0} đánh giá)</Text>
+                </View>
+                <View style={styles.ratingPrompt}>
+                  <Text style={[styles.ratingPromptText, { color: theme.primary }]}>Đánh giá học phần</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme.primary} />
+                </View>
+              </TouchableOpacity>
+
+              {isPreviewMode ? (
+                <View style={[styles.previewBanner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.previewTitle, { color: theme.text }]}>Xem trước học phần Plus</Text>
+                    <Text style={[styles.previewText, { color: theme.textMuted }]}>
+                      Bạn có thể xem trước tối đa {previewCardLimit} thẻ ({previewLoadedCount}/{totalCardCount} đang hiển thị). Cần Plus để bắt đầu học và ôn tập.
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={[styles.previewButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/(profile)/plus' as any)}>
+                    <Text style={styles.previewButtonText}>Mở Plus</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* Action Buttons Grid */}
+              <View style={[styles.actionsGridWeb, { gap: 10 }]}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {/* Thẻ ghi nhớ */}
+                  <HoverableCard 
+                    theme={theme} 
+                    disabled={learningActionsDisabled} 
+                    style={[styles.gridActionButtonWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+                    onPress={() => router.push(`/flashcard/${id}` as any)}
+                  >
+                    <Ionicons name="albums" size={22} color={!learningActionsMuted ? "#3b82f6" : theme.textMuted} />
+                    <Text numberOfLines={1} style={[styles.gridActionButtonTextWeb, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>
+                      Thẻ ghi nhớ
+                    </Text>
+                  </HoverableCard>
+
+                  {/* Kiểm tra */}
+                  <HoverableCard 
+                    theme={theme} 
+                    disabled={learningActionsDisabled} 
+                    style={[styles.gridActionButtonWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+                    onPress={() => router.push(`/practice-setup/${id}` as any)}
+                  >
+                    <Ionicons name="document-text" size={22} color={!learningActionsMuted ? "#10b981" : theme.textMuted} />
+                    <Text numberOfLines={1} style={[styles.gridActionButtonTextWeb, { color: theme.text }, learningActionsMuted && { color: theme.textMuted }]}>
+                      Kiểm tra
+                    </Text>
+                  </HoverableCard>
+                </View>
               </View>
             </View>
 
             {!isMobile && (
               <View style={styles.heroRight}>
                 {cards.length > 0 ? (
-                  <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)}>
+                  <TouchableOpacity style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.push(`/flashcard/${id}` as any)} disabled={isPreviewMode}>
                     <Text style={[styles.flashcardWord, { color: theme.text }]}>{cards[0].contentFront}</Text>
-                    <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} />
+                    {!isPreviewMode ? <Ionicons name="scan-outline" size={20} color={theme.textMuted} style={styles.fullscreenIcon} /> : null}
                   </TouchableOpacity>
+                ) : isPreviewMode || cardsAccessBlocked ? (
+                  <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Text style={[styles.flashcardWord, { color: theme.text, textAlign: 'center' }]}>{PLUS_REQUIRED_MESSAGE}</Text>
+                  </View>
                 ) : (
                   <View style={[styles.flashcardPreview, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.flashcardWord, { color: theme.text }]}>Học phần trống</Text>
@@ -465,83 +590,109 @@ export default function ModuleDetailWebScreen() {
           </View>
 
           {/* Progress */}
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Tiến độ</Text>
-          <Text style={[styles.progressDesc, { color: theme.textMuted }]}>
-            Thẻ cần ôn: <Text style={{ fontWeight: 'bold', color: '#f59e0b' }}>{dueCount}</Text>
-          </Text>
+          <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 16 }]}>Tiến độ</Text>
 
-          {(() => {
-            const nextReview = formatNextReview(progress?.nextReviewDate, progress?.dueNow, nowTick);
-            const toneColor = nextReview.tone === 'due' ? '#f59e0b' : nextReview.tone === 'soon' ? theme.primary : theme.textMuted;
-            const icon = nextReview.tone === 'due' ? 'alarm' : nextReview.tone === 'soon' ? 'time-outline' : 'calendar-outline';
-            return (
-              <View style={[styles.nextReviewBanner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Ionicons name={icon as any} size={20} color={toneColor} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.nextReviewLabel, { color: theme.textMuted }]}>Lần ôn tập tiếp theo</Text>
-                  <Text style={[styles.nextReviewValue, { color: toneColor }]}>{nextReview.label}</Text>
-                </View>
-              </View>
-            );
-          })()}
-
-          <View style={[styles.progressStatsGrid, { flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 24 }]}>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=new` as any)}>
+          <View style={[styles.progressStatsGrid, { flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 24, flexDirection: isMobile ? 'column' : 'row' }]}>
+            {/* Thẻ chưa học bao giờ */}
+            <HoverableCard 
+              theme={theme} 
+              disabled={learningActionsDisabled} 
+              style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+              onPress={() => router.push(`/quiz/${id}?newLimit=${studySettings?.newCardLimit ?? 20}&reviewLimit=0` as any)}
+              // @ts-ignore
+              title="Giới hạn bởi Daily Limits của bạn, dự kiến học trong hôm nay"
+            >
               <View style={[styles.statRing, { borderColor: '#5865F2' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.newCount ?? 0}</Text>
               </View>
-              <Text style={[styles.statLabel, { color: theme.text }]}>Chưa học</Text>
+              <Text style={[styles.statLabel, { color: theme.text, marginLeft: 16 }]}>Chưa học</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} disabled={cards.length === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }]} onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}>
+
+            {/* Thẻ đang học dở dang */}
+            <HoverableCard 
+              theme={theme} 
+              disabled={learningActionsDisabled} 
+              style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+              onPress={() => router.push(`/quiz/${id}?filterState=studying` as any)}
+              // @ts-ignore
+              title="Đang trong quá trình lặp lại ngắn hạn (1 phút, 10 phút) để ghi nhớ tạm thời"
+            >
               <View style={[styles.statRing, { borderColor: '#f59e0b' }]}>
                 <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.learnCount ?? 0}</Text>
               </View>
-              <Text style={[styles.statLabel, { color: theme.text }]}>Đang học</Text>
+              <Text style={[styles.statLabel, { color: theme.text, marginLeft: 16 }]}>Đang học</Text>
             </HoverableCard>
-            <HoverableCard theme={theme} disabled={(progress?.memorizedCount ?? 0) === 0} style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border, ...(isMobile && { minWidth: '44%' as any }) }, { opacity: (progress?.memorizedCount ?? 0) > 0 ? 1 : 0.5 }]} onPress={() => router.push(`/quiz/${id}?filterState=memorized` as any)}>
+
+            {/* Thẻ cần ôn tập */}
+            <HoverableCard 
+              theme={theme} 
+              disabled={learningActionsDisabled} 
+              style={[styles.statCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+              onPress={() => router.push(`/quiz/${id}?newLimit=0&reviewLimit=${studySettings?.reviewCardLimit ?? 200}` as any)}
+              // @ts-ignore
+              title="Đã thuộc trước đó nhưng đến hạn phải kiểm tra lại theo lịch FSRS để tránh quên"
+            >
               <View style={[styles.statRing, { borderColor: '#10b981' }]}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{progress?.memorizedCount ?? 0}</Text>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{dueCount ?? 0}</Text>
               </View>
-              <Text style={[styles.statLabel, { color: theme.text }]}>Thành thạo</Text>
+              <Text style={[styles.statLabel, { color: theme.text, marginLeft: 16 }]}>Đến hạn</Text>
             </HoverableCard>
           </View>
 
           {/* Terms List Grid */}
           <View style={styles.termsHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Thuật ngữ ({cards.length})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              {isPreviewMode ? 'Xem trước' : 'Thuật ngữ'} ({filteredCards.length}{cardSearchQuery.trim() ? `/${cards.length}` : ''}{isPreviewMode ? `/${totalCardCount}` : ''})
+            </Text>
           </View>
 
+          <SearchBar
+            value={cardSearchQuery}
+            onChangeText={setCardSearchQuery}
+            placeholder="Tìm thuật ngữ hoặc định nghĩa"
+            style={styles.searchBar}
+          />
+
           <View style={styles.termsGrid}>
-            {cards.map((item) => (
-              <View key={item.cardId} style={[styles.termCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={styles.termCardContent}>
-                  <View style={styles.termSide}>
-                    {item.langFront ? <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langFront] || item.langFront}</Text> : null}
-                    <Text style={[styles.termText, { color: theme.text }]}>{item.contentFront}</Text>
-                  </View>
-                  <View style={[styles.termDivider, { backgroundColor: theme.border }]} />
-                  <View style={styles.termSide}>
-                    {item.langBack ? <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langBack] || item.langBack}</Text> : null}
-                    <Text style={[styles.termText, { color: theme.textMuted }]}>{item.contentBack}</Text>
-                  </View>
-                  {item.imageUrl ? (
-                    <View style={styles.termImageSide}>
-                      <Image source={{ uri: item.imageUrl }} style={styles.termImage} resizeMode="cover" />
-                    </View>
-                  ) : null}
-                </View>
-                {isOwner && (
-                  <View style={styles.termActionsWeb}>
-                    <TouchableOpacity style={styles.actionIconCell} onPress={() => handleOpenCardEdit(item)}>
-                      <Ionicons name="pencil-outline" size={20} color={theme.textMuted} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionIconCell} onPress={() => handleDeleteCard(item.cardId)}>
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                )}
+            {filteredCards.length === 0 ? (
+              <View style={[styles.emptySearchState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.emptySearchTitle, { color: theme.text }]}>Không tìm thấy thẻ phù hợp</Text>
+                <Text style={[styles.emptySearchText, { color: theme.textMuted }]}>
+                  Thử từ khóa khác hoặc xóa bộ lọc tìm kiếm.
+                </Text>
               </View>
-            ))}
+            ) : (
+              filteredCards.map((item) => (
+                <View key={item.cardId} style={[styles.termCardWeb, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={styles.termCardContent}>
+                    <View style={styles.termSide}>
+                      {item.langFront ? <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langFront] || item.langFront}</Text> : null}
+                      <Text style={[styles.termText, { color: theme.text }]}>{item.contentFront}</Text>
+                    </View>
+                    <View style={[styles.termDivider, { backgroundColor: theme.border }]} />
+                    <View style={styles.termSide}>
+                      {item.langBack ? <Text style={[styles.termLangLabel, { color: theme.primary }]}>{langNameMap[item.langBack] || item.langBack}</Text> : null}
+                      <Text style={[styles.termText, { color: theme.textMuted }]}>{item.contentBack}</Text>
+                    </View>
+                    {item.imageUrl ? (
+                      <View style={styles.termImageSide}>
+                        <Image source={{ uri: item.imageUrl }} style={styles.termImage} resizeMode="cover" />
+                      </View>
+                    ) : null}
+                  </View>
+                  {isOwner && (
+                    <View style={styles.termActionsWeb}>
+                      <TouchableOpacity style={styles.actionIconCell} onPress={() => handleOpenCardEdit(item)}>
+                        <Ionicons name="pencil-outline" size={20} color={theme.textMuted} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionIconCell} onPress={() => handleDeleteCard(item.cardId)}>
+                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
           </View>
 
           <View style={{ height: 60 }} />
@@ -669,6 +820,32 @@ export default function ModuleDetailWebScreen() {
         </View>
       </Modal>
 
+      {/* Rating Modal (web) */}
+      <Modal visible={showRatingModal} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowRatingModal(false)} />
+          <View style={[styles.ratingModalContent, { backgroundColor: theme.background, borderColor: theme.border, width: isMobile ? screenWidth - 32 : 420 }]}>
+            <Text style={[styles.modalTitle, { color: theme.text, textAlign: 'center' }]}>Đánh giá học phần</Text>
+            <Text style={[styles.ratingHelpText, { color: theme.textMuted }]}>Chọn số sao phù hợp với chất lượng nội dung học phần.</Text>
+            <View style={styles.ratingStars}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity key={star} onPress={() => setMyRating(star)} style={styles.ratingStarButton} activeOpacity={0.7}>
+                  <Ionicons name={star <= myRating ? 'star' : 'star-outline'} size={42} color="#f59e0b" />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setShowRatingModal(false)} style={styles.btnSecondary} disabled={isSubmittingRating}>
+                <Text style={{ color: theme.text }}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSubmitRating} style={[styles.btnPrimary, (myRating === 0 || isSubmittingRating) && { opacity: 0.55 }]} disabled={myRating === 0 || isSubmittingRating}>
+                {isSubmittingRating ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Gửi đánh giá</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Hidden file input for web image picker */}
       {typeof document !== 'undefined' && (
         <input
@@ -772,7 +949,8 @@ const styles = StyleSheet.create({
   flashcardWord: { fontSize: 32, fontWeight: '500', textAlign: 'center', paddingHorizontal: 24 },
   fullscreenIcon: { position: 'absolute', bottom: 20, right: 20 },
 
-  moduleTitle: { fontSize: 36, fontWeight: 'bold', marginBottom: 12 },
+  moduleTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  moduleTitle: { fontSize: 36, fontWeight: 'bold', flexShrink: 1 },
   moduleDesc: { fontSize: 18, marginBottom: 16 },
   authorContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
   authorAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#5865F2', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
@@ -780,10 +958,28 @@ const styles = StyleSheet.create({
   authorAvatarText: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
   authorName: { fontSize: 16, fontWeight: '600' },
   termCount: { fontSize: 16 },
+  previewBanner: { flexDirection: 'row', alignItems: 'center', gap: 16, borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 20 },
+  previewTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  previewText: { fontSize: 14, lineHeight: 20 },
+  previewButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  previewButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  ratingPanel: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 20, gap: 12 },
+  ratingSummary: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ratingValue: { fontSize: 18, fontWeight: '800' },
+  ratingCount: { fontSize: 14 },
+  ratingPrompt: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ratingPromptText: { fontSize: 14, fontWeight: '700' },
+  ratingModalContent: { borderRadius: 16, borderWidth: 1, padding: 24, zIndex: 1 },
+  ratingHelpText: { fontSize: 14, textAlign: 'center', marginTop: -4, marginBottom: 18 },
+  ratingStars: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 22 },
+  ratingStarButton: { padding: 4, cursor: 'pointer' as any },
 
   actionsGrid: { flexDirection: 'row', gap: 12 },
   actionCard: { flex: 1, paddingVertical: 16, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 8 },
   actionCardText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  actionsGridWeb: { gap: 10, marginBottom: 24 },
+  gridActionButtonWeb: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1 },
+  gridActionButtonTextWeb: { marginLeft: 10, fontSize: 15, fontWeight: '600', flex: 1 },
 
   sectionTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
   progressDesc: { fontSize: 16, marginBottom: 12 },
@@ -797,7 +993,11 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 18, fontWeight: '600' },
 
   termsHeader: { marginBottom: 20 },
+  searchBar: { marginBottom: 16 },
   termsGrid: { flexDirection: 'column', gap: 16 },
+  emptySearchState: { borderRadius: 12, borderWidth: 1, padding: 20 },
+  emptySearchTitle: { fontSize: 16, fontWeight: '600', marginBottom: 6 },
+  emptySearchText: { fontSize: 14, lineHeight: 20 },
   termCardWeb: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
   termCardContent: { flex: 1, flexDirection: 'row' },
   termSide: { flex: 1, padding: 20 },
@@ -810,6 +1010,7 @@ const styles = StyleSheet.create({
   actionIconCell: { padding: 8, borderRadius: 8, cursor: 'pointer' as any },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject },
   modalContentWeb: { maxWidth: 500, padding: 24, borderRadius: 16, borderWidth: 1 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
   textInput: { padding: 12, borderRadius: 8, fontSize: 16, borderWidth: 1 },

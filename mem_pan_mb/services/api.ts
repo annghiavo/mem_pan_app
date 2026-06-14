@@ -30,6 +30,26 @@ async function appendImageFile(
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/v1'; let authToken = '';
 let currentRefreshToken = '';
 
+export const PLUS_REQUIRED_MESSAGE = 'Please purchase the plus package to start learning.';
+
+export type ApiError = Error & {
+  status?: number;
+  data?: any;
+};
+
+export const isPlusAccessError = (error: unknown): boolean => {
+  const err = error as ApiError | undefined;
+  if (err?.status !== 403) return false;
+  const message = String(err?.message || '').toLowerCase();
+  return (
+    !message ||
+    message.includes('plus') ||
+    message.includes('subscription') ||
+    message.includes('không có quyền') ||
+    message.includes('khong co quyen')
+  );
+};
+
 // --- API call logging (dev only) ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const LOG_API = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
@@ -189,7 +209,7 @@ const handleResponse = async (response: Response, method = 'GET', url = '', quie
   if (!quiet) logResponse(method, url, response.status, data);
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && !quiet) {
       const onPublicAuthRoute =
         typeof window !== 'undefined' &&
         /\/(reset-password|login|register)(\b|\/|\?|$)/.test(window.location?.pathname || '');
@@ -202,7 +222,10 @@ const handleResponse = async (response: Response, method = 'GET', url = '', quie
       }
       return {};
     }
-    throw new Error(extractApiMessage(data, response.status));
+    const error = new Error(extractApiMessage(data, response.status)) as ApiError;
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -252,6 +275,20 @@ export const resetPassword = (token: string, newPassword: string) => {
   return request('/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify({ token, newPassword }),
+  });
+};
+
+export const verifyEmail = (token: string) => {
+  return request('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+};
+
+export const resendVerification = (email: string) => {
+  return request('/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
   });
 };
 
@@ -379,6 +416,13 @@ export const updateDeckVisibility = (deckId: string, isPublic: boolean) => {
   return request(`/decks/${deckId}/visibility`, {
     method: 'PATCH',
     body: JSON.stringify({ isPublic }),
+  });
+};
+
+export const updateDeckAccessLevel = (deckId: string, accessLevel: 'free' | 'plus' | 'private') => {
+  return request(`/decks/${deckId}/access`, {
+    method: 'PATCH',
+    body: JSON.stringify({ access_level: accessLevel }),
   });
 };
 
@@ -655,6 +699,8 @@ export const updateDeckStudySettings = (deckId: string, settings: {
   questionTypeWritten: boolean;
   strictnessLevel: string;
   requireRetypingCorrectAnswer: boolean;
+  newCardLimit: number;
+  reviewCardLimit: number;
 }) => {
   return request(`/study/decks/${deckId}/settings`, {
     method: 'PUT',
@@ -820,4 +866,194 @@ export const reportUser = (userId: string, payload: { reasonCategory: string; de
     method: 'POST',
     body: JSON.stringify(payload),
   });
+};
+
+// --- Billing / Plus ---
+export const normalizeCheckoutUrl = (data: any): string => {
+  return data?.checkoutUrl || data?.checkout_url || data?.CheckoutURL || '';
+};
+
+export const normalizeSubscription = (data: any): any => {
+  const raw = data?.subscription || data?.data?.subscription || data?.data || data || null;
+  if (!raw) return null;
+  return {
+    ...raw,
+    active: raw.active ?? raw.Active ?? false,
+    subscription_id: raw.subscription_id ?? raw.SubscriptionID ?? '',
+    subscriptionId: raw.subscriptionId ?? raw.subscription_id ?? raw.SubscriptionID ?? '',
+    plan_code: raw.plan_code ?? raw.PlanCode ?? '',
+    planCode: raw.planCode ?? raw.plan_code ?? raw.PlanCode ?? '',
+    status: raw.status ?? raw.Status ?? 'none',
+    current_period_end: raw.current_period_end ?? raw.CurrentPeriodEnd ?? '',
+    currentPeriodEnd: raw.currentPeriodEnd ?? raw.current_period_end ?? raw.CurrentPeriodEnd ?? '',
+  };
+};
+
+export type CheckoutPlusInput = {
+  planCode: string;
+  returnUrl?: string;
+  cancelUrl?: string;
+  origin?: string;
+};
+
+export const checkoutPlus = ({ planCode, returnUrl, cancelUrl, origin }: CheckoutPlusInput) => {
+  return request('/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({
+      plan_code: planCode,
+      return_url: returnUrl,
+      cancel_url: cancelUrl,
+      origin,
+    }),
+  });
+};
+
+export const getMySubscription = (quiet = false) => {
+  return request('/billing/subscription/me', undefined, { quiet });
+};
+
+export const confirmPayment = (orderCode: number) => {
+  return request('/billing/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ order_code: orderCode }),
+  });
+};
+
+// --- Creator ---
+export type BillingBank = {
+  bin: string;
+  code: string;
+  short_name: string;
+  name: string;
+  logo?: string;
+  transfer_supported: boolean;
+};
+
+export type CreatorPayoutAccountInput = {
+  bank_bin: string;
+  bank_code: string;
+  bank_short_name: string;
+  bank_name: string;
+  bank_logo?: string;
+  account_number: string;
+  account_name: string;
+};
+
+export type CreatorEarningsSummary = {
+  current_learners: number;
+  total_earned_amount_vnd: number;
+  available_balance_vnd: number;
+  pending_withdrawal_amount_vnd: number;
+  total_withdrawn_amount_vnd: number;
+  latest_pool_month?: string;
+};
+
+export type CreatorBalanceHistoryItem = {
+  transaction_id: string;
+  type: 'earning_credit' | 'withdrawal' | string;
+  source_id: string;
+  amount_vnd: number;
+  absolute_amount_vnd: number;
+  ledger_status: string;
+  occurred_at: string;
+  created_at: string;
+  updated_at: string;
+  pool_month?: string;
+  earning_id?: string;
+  earning_status?: string;
+  eligible_learners?: number;
+  weighted_score?: string;
+  withdrawal_id?: string;
+  withdrawal_status?: string;
+  withdrawal_requested_at?: string;
+  withdrawal_paid_at?: string;
+  payout_to_bin?: string;
+  payout_to_account_number?: string;
+  payout_to_account_name?: string;
+  payos_payout_id?: string;
+  payos_payout_transaction_id?: string;
+  payos_payout_state?: string;
+  payout_failed_reason?: string;
+};
+
+export type CreatorBalanceHistoryResult = {
+  items: CreatorBalanceHistoryItem[];
+  limit: number;
+  offset: number;
+};
+
+export type CreateWithdrawalInput = {
+  amount_vnd: number;
+};
+
+export type CreatorWithdrawalResult = {
+  withdrawal: any;
+  balance: CreatorEarningsSummary;
+  payout_id: string;
+  transaction_id: string;
+  reference_id: string;
+  state: string;
+  status: string;
+};
+
+export const getBillingBanks = async (): Promise<BillingBank[]> => {
+  const res = await request('/billing/banks');
+  return res?.data || [];
+};
+
+export const getMyEarningsSummary = (quiet = false): Promise<CreatorEarningsSummary> => {
+  return request('/creators/me/earnings/summary', undefined, { quiet });
+};
+
+export const getMyBalanceHistory = (limit = 100, offset = 0, quiet = false): Promise<CreatorBalanceHistoryResult> => {
+  return request(`/creators/me/balance-history?limit=${limit}&offset=${offset}`, undefined, { quiet });
+};
+
+export const getMyPayoutAccount = (quiet = false) => {
+  return request('/creators/me/payout-account', undefined, { quiet });
+};
+
+export const upsertMyPayoutAccount = (data: CreatorPayoutAccountInput) => {
+  return request('/creators/me/payout-account', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const createMyWithdrawal = (data: CreateWithdrawalInput): Promise<CreatorWithdrawalResult> => {
+  return request('/creators/me/withdrawals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const getCreatorProfile = (userId: string) => {
+  return request(`/creators/${userId}`);
+};
+
+export const upsertCreatorProfile = (data: { displayName?: string; bio?: string }) => {
+  return request('/creators/me', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const followCreator = (creatorId: string) => {
+  return request(`/creators/${creatorId}/follow`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+};
+
+// --- Deck Reviews ---
+export const upsertDeckReview = (deckId: string, rating: number) => {
+  return request(`/decks/${deckId}/review`, {
+    method: 'PUT',
+    body: JSON.stringify({ rating }),
+  });
+};
+
+export const getDeckReviews = (deckId: string, page = 1, pageSize = 20) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return request(`/decks/${deckId}/reviews?${params.toString()}`);
 };

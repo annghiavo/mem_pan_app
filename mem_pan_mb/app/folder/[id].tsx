@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFolder, deleteFolder, updateFolder } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
+import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
 export default function FolderDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -125,7 +126,10 @@ export default function FolderDetailScreen() {
           {decks && decks.length > 0 ? decks.map((item: any) => (
             <TouchableOpacity key={item.deckId} style={[styles.moduleCard, { backgroundColor: theme.surface }]} onPress={() => router.push(`/module/${item.deckId}` as any)}>
               <View style={styles.moduleContent}>
-                <Text style={[styles.moduleTitle, { color: theme.text }]}>{item.name}</Text>
+                <View style={styles.moduleTitleRow}>
+                  <Text style={[styles.moduleTitle, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                  {isPlusDeck(item) ? <PlusDeckBadge compact /> : null}
+                </View>
                 <Text style={[styles.moduleSubtitle, { color: theme.textMuted }]}>{item.cardCount || 0} thuật ngữ • bạn</Text>
               </View>
               <View style={styles.moduleIcon}>
@@ -218,7 +222,8 @@ const styles = StyleSheet.create({
   statsText: { fontSize: 16, fontWeight: '600' },
   moduleCard: { flexDirection: 'row', padding: 16, borderRadius: 12, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   moduleContent: { flex: 1 },
-  moduleTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  moduleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  moduleTitle: { fontSize: 18, fontWeight: 'bold', flex: 1 },
   moduleSubtitle: { fontSize: 14 },
   moduleIcon: { justifyContent: 'center', alignItems: 'center', paddingLeft: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

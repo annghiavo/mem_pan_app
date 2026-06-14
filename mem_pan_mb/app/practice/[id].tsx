@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, TextInput, useColorScheme, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getDeckCards, getDeckStudySettings } from '../../services/api';
+import { getDeckCards, getDeckStudySettings, isPlusAccessError, PLUS_REQUIRED_MESSAGE } from '../../services/api';
 import { checkAnswer, pickRandom, shuffleArray } from '../../utils/learningLogic';
 import { defaultStudySettings } from '../../types/studySettings';
 import { Audio } from 'expo-av';
@@ -40,6 +40,8 @@ export default function PracticeTestScreen() {
   const [loading, setLoading] = useState(true);
   const [strictnessLevel, setStrictnessLevel] = useState<'flexible' | 'strict'>(defaultStudySettings.strictnessLevel);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [emptyMessage, setEmptyMessage] = useState('Không có thẻ nào để kiểm tra.');
+  const [plusAccessRequired, setPlusAccessRequired] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [isFinished, setIsFinished] = useState(false);
@@ -71,6 +73,9 @@ export default function PracticeTestScreen() {
   useEffect(() => {
     const initTest = async () => {
       try {
+        setPlusAccessRequired(false);
+        setEmptyMessage('Không có thẻ nào để kiểm tra.');
+        setQuestions([]);
         const [res, settingsRes] = await Promise.all([
           getDeckCards(deckId),
           getDeckStudySettings(deckId).catch(() => null),
@@ -134,7 +139,12 @@ export default function PracticeTestScreen() {
 
         setQuestions(generated);
       } catch (err) {
-        console.error('Error fetching cards:', err);
+        if (isPlusAccessError(err)) {
+          setPlusAccessRequired(true);
+          setEmptyMessage(PLUS_REQUIRED_MESSAGE);
+        } else {
+          console.error('Error fetching cards:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -202,10 +212,21 @@ export default function PracticeTestScreen() {
     );
   }
 
+  if (plusAccessRequired) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: theme.text, textAlign: 'center', paddingHorizontal: 24 }}>{PLUS_REQUIRED_MESSAGE}</Text>
+        <TouchableOpacity style={{ marginTop: 16 }} onPress={() => router.back()}>
+          <Text style={{ color: theme.primary }}>Quay lại</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: theme.text }}>Không có thẻ nào để kiểm tra.</Text>
+        <Text style={{ color: theme.text, textAlign: 'center', paddingHorizontal: 24 }}>{emptyMessage}</Text>
         <TouchableOpacity style={{ marginTop: 16 }} onPress={() => router.back()}>
           <Text style={{ color: theme.primary }}>Quay lại</Text>
         </TouchableOpacity>

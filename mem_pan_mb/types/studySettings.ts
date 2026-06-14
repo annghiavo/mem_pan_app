@@ -8,6 +8,8 @@ export interface StudySettings {
   questionTypeWritten: boolean;
   strictnessLevel: 'flexible' | 'strict';
   requireRetypingCorrectAnswer: boolean;
+  newCardLimit: number;
+  reviewCardLimit: number;
 }
 
 export const defaultStudySettings: StudySettings = {
@@ -20,4 +22,6 @@ export const defaultStudySettings: StudySettings = {
   questionTypeWritten: true,
   strictnessLevel: 'flexible',
   requireRetypingCorrectAnswer: false,
+  newCardLimit: 20,
+  reviewCardLimit: 200,
 };
