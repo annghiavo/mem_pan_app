@@ -80,9 +80,10 @@ export default function PracticeSetupScreen() {
           setLangBackLabel(bl);
         }
       } catch (err) {
-        console.error('Error fetching deck:', err);
         if (isPlusAccessError(err)) {
           setPlusAccessRequired(true);
+        } else {
+          console.error('Error fetching deck:', err);
         }
       } finally {
         setLoading(false);

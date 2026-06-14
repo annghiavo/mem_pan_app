@@ -1,0 +1,10 @@
+services:
+  mempan-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL}
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    restart: unless-stopped

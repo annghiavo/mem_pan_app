@@ -278,6 +278,20 @@ export const resetPassword = (token: string, newPassword: string) => {
   });
 };
 
+export const verifyEmail = (token: string) => {
+  return request('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+};
+
+export const resendVerification = (email: string) => {
+  return request('/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+};
+
 export const logoutUser = (refreshToken: string) => {
   return request('/auth/logout', {
     method: 'POST',
@@ -685,6 +699,8 @@ export const updateDeckStudySettings = (deckId: string, settings: {
   questionTypeWritten: boolean;
   strictnessLevel: string;
   requireRetypingCorrectAnswer: boolean;
+  newCardLimit: number;
+  reviewCardLimit: number;
 }) => {
   return request(`/study/decks/${deckId}/settings`, {
     method: 'PUT',
@@ -873,10 +889,22 @@ export const normalizeSubscription = (data: any): any => {
   };
 };
 
-export const checkoutPlus = (planCode: string) => {
+export type CheckoutPlusInput = {
+  planCode: string;
+  returnUrl?: string;
+  cancelUrl?: string;
+  origin?: string;
+};
+
+export const checkoutPlus = ({ planCode, returnUrl, cancelUrl, origin }: CheckoutPlusInput) => {
   return request('/billing/checkout', {
     method: 'POST',
-    body: JSON.stringify({ plan_code: planCode }),
+    body: JSON.stringify({
+      plan_code: planCode,
+      return_url: returnUrl,
+      cancel_url: cancelUrl,
+      origin,
+    }),
   });
 };
 
@@ -892,11 +920,118 @@ export const confirmPayment = (orderCode: number) => {
 };
 
 // --- Creator ---
+export type BillingBank = {
+  bin: string;
+  code: string;
+  short_name: string;
+  name: string;
+  logo?: string;
+  transfer_supported: boolean;
+};
+
+export type CreatorPayoutAccountInput = {
+  bank_bin: string;
+  bank_code: string;
+  bank_short_name: string;
+  bank_name: string;
+  bank_logo?: string;
+  account_number: string;
+  account_name: string;
+};
+
+export type CreatorEarningsSummary = {
+  current_learners: number;
+  total_earned_amount_vnd: number;
+  available_balance_vnd: number;
+  pending_withdrawal_amount_vnd: number;
+  total_withdrawn_amount_vnd: number;
+  latest_pool_month?: string;
+};
+
+export type CreatorBalanceHistoryItem = {
+  transaction_id: string;
+  type: 'earning_credit' | 'withdrawal' | string;
+  source_id: string;
+  amount_vnd: number;
+  absolute_amount_vnd: number;
+  ledger_status: string;
+  occurred_at: string;
+  created_at: string;
+  updated_at: string;
+  pool_month?: string;
+  earning_id?: string;
+  earning_status?: string;
+  eligible_learners?: number;
+  weighted_score?: string;
+  withdrawal_id?: string;
+  withdrawal_status?: string;
+  withdrawal_requested_at?: string;
+  withdrawal_paid_at?: string;
+  payout_to_bin?: string;
+  payout_to_account_number?: string;
+  payout_to_account_name?: string;
+  payos_payout_id?: string;
+  payos_payout_transaction_id?: string;
+  payos_payout_state?: string;
+  payout_failed_reason?: string;
+};
+
+export type CreatorBalanceHistoryResult = {
+  items: CreatorBalanceHistoryItem[];
+  limit: number;
+  offset: number;
+};
+
+export type CreateWithdrawalInput = {
+  amount_vnd: number;
+};
+
+export type CreatorWithdrawalResult = {
+  withdrawal: any;
+  balance: CreatorEarningsSummary;
+  payout_id: string;
+  transaction_id: string;
+  reference_id: string;
+  state: string;
+  status: string;
+};
+
+export const getBillingBanks = async (): Promise<BillingBank[]> => {
+  const res = await request('/billing/banks');
+  return res?.data || [];
+};
+
+export const getMyEarningsSummary = (quiet = false): Promise<CreatorEarningsSummary> => {
+  return request('/creators/me/earnings/summary', undefined, { quiet });
+};
+
+export const getMyBalanceHistory = (limit = 100, offset = 0, quiet = false): Promise<CreatorBalanceHistoryResult> => {
+  return request(`/creators/me/balance-history?limit=${limit}&offset=${offset}`, undefined, { quiet });
+};
+
+export const getMyPayoutAccount = (quiet = false) => {
+  return request('/creators/me/payout-account', undefined, { quiet });
+};
+
+export const upsertMyPayoutAccount = (data: CreatorPayoutAccountInput) => {
+  return request('/creators/me/payout-account', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const createMyWithdrawal = (data: CreateWithdrawalInput): Promise<CreatorWithdrawalResult> => {
+  return request('/creators/me/withdrawals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
 export const getCreatorProfile = (userId: string) => {
   return request(`/creators/${userId}`);
 };
 
-export const upsertCreatorProfile = (data: { displayName?: string; bio?: string; bankName?: string; bankAccountNumber?: string; bankAccountName?: string }) => {
+export const upsertCreatorProfile = (data: { displayName?: string; bio?: string }) => {
   return request('/creators/me', {
     method: 'PUT',
     body: JSON.stringify(data),

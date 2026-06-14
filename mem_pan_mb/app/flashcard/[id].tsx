@@ -47,6 +47,7 @@ export default function FlashcardScreen() {
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [emptyMessage, setEmptyMessage] = useState('Không có thẻ nào trong học phần này.');
+  const [plusAccessRequired, setPlusAccessRequired] = useState(false);
 
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
@@ -55,14 +56,17 @@ export default function FlashcardScreen() {
   useEffect(() => {
     const fetchCards = async () => {
       try {
+        setPlusAccessRequired(false);
         setEmptyMessage('Không có thẻ nào trong học phần này.');
         setCards([]);
         const response = await getDeckCards(deckId);
         setCards(response.cards || []);
       } catch (error) {
-        console.error('Error fetching cards:', error);
         if (isPlusAccessError(error)) {
+          setPlusAccessRequired(true);
           setEmptyMessage(PLUS_REQUIRED_MESSAGE);
+        } else {
+          console.error('Error fetching cards:', error);
         }
       } finally {
         setLoading(false);
@@ -121,7 +125,7 @@ export default function FlashcardScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ fontSize: 18, color: theme.textMuted, marginBottom: 16, textAlign: 'center', paddingHorizontal: 24 }}>{emptyMessage}</Text>
         <TouchableOpacity style={{ backgroundColor: theme.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 }} onPress={() => router.back()}>
-          <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>Quay lại</Text>
+          <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>{plusAccessRequired ? 'Quay lại' : 'Quay lại'}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

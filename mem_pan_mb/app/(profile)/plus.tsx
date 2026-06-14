@@ -6,6 +6,22 @@ import { getMySubscription, checkoutPlus, normalizeCheckoutUrl, normalizeSubscri
 import { WebContainer } from '../../components/ui/WebContainer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const getBillingCallbackUrls = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+        const origin = window.location.origin;
+        return {
+            origin,
+            returnUrl: `${origin}/billing/return`,
+            cancelUrl: `${origin}/billing/cancel`,
+        };
+    }
+
+    return {
+        returnUrl: 'mempanmb://billing/return',
+        cancelUrl: 'mempanmb://billing/cancel',
+    };
+};
+
 export default function PlusScreen() {
     const router = useRouter();
     const [subscription, setSubscription] = useState<any>(null);
@@ -81,7 +97,13 @@ export default function PlusScreen() {
     const handleSubscribe = async (planCode: string) => {
         setCheckoutLoading(true);
         try {
-            const data = await checkoutPlus(planCode);
+            const callbackUrls = getBillingCallbackUrls();
+            const data = await checkoutPlus({
+                planCode,
+                returnUrl: callbackUrls.returnUrl,
+                cancelUrl: callbackUrls.cancelUrl,
+                origin: callbackUrls.origin,
+            });
             console.log('Checkout API response:', data);
             const checkoutUrl = normalizeCheckoutUrl(data);
             console.log('Normalized Checkout URL:', checkoutUrl);
@@ -117,18 +139,20 @@ export default function PlusScreen() {
                     <Text style={[styles.headerTitle, { color: theme.text }]}>Gói Plus</Text>
                     <View style={{ width: 40 }} />
                 </View>
+            </WebContainer>
 
-                {loading && !refreshing ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={theme.primary} />
-                    </View>
-                ) : (
-                    <ScrollView
-                        style={styles.content}
-                        refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
-                        }
-                    >
+            {loading && !refreshing ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+            ) : (
+                <ScrollView
+                    style={styles.content}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+                    }
+                >
+                    <WebContainer maxWidth={720} paddingHorizontal={0}>
                         <View style={styles.heroSection}>
                             <Ionicons name="star" size={64} color={theme.plusGold} style={{ marginBottom: 16 }} />
                             <Text style={[styles.heroTitle, { color: theme.text }]}>MemPan Plus</Text>
@@ -179,9 +203,9 @@ export default function PlusScreen() {
                                 </View>
                             </View>
                         )}
-                    </ScrollView>
-                )}
-            </WebContainer>
+                    </WebContainer>
+                </ScrollView>
+            )}
         </SafeAreaView>
     );
 }

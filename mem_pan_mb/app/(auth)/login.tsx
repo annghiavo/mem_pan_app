@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Keyb
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebContainer } from '../../components/ui/WebContainer';
-import { showAlert } from '../../utils/alert';
+import { showAlert, showConfirm } from '../../utils/alert';
 import { devlog } from '../../services/devlog';
 
 export default function LoginScreen() {
@@ -95,7 +95,17 @@ export default function LoginScreen() {
         if (Platform.OS === 'web') return; // router.replace already called in showAlert callback
       } else {
         devlog.warn('login:failed', { status: response.status, message: data?.message });
-        showAlert('Lỗi đăng nhập', data.message || 'Tài khoản hoặc mật khẩu không chính xác.');
+        if (data?.message === 'email not verified') {
+          showConfirm(
+            'Xác thực email',
+            'Tài khoản của bạn chưa được xác thực email. Bạn có muốn đi tới trang xác thực để gửi lại email kích hoạt không?',
+            () => router.push({ pathname: '/(auth)/verify-email', params: { email: identifier } } as any),
+            'Xác thực',
+            'Đóng'
+          );
+        } else {
+          showAlert('Lỗi đăng nhập', data.message || 'Tài khoản hoặc mật khẩu không chính xác.');
+        }
       }
     } catch (error) {
       devlog.error('login: network/unknown error', error);

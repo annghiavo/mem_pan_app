@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, useColorScheme, Image, TextInput, KeyboardAvoidingView, Platform,
-  Keyboard, Animated,
+  Keyboard, Animated, PanResponder, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -35,7 +35,7 @@ const langNameMap: Record<string, string> = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type QuestionType = 'mc' | 'written';
+type QuestionType = 'mc' | 'written' | 'flashcard';
 
 // Each "question key" identifies a (cardId, questionType) pair. With both
 // MC and Written enabled the user has to answer each card once per type,
@@ -70,6 +70,7 @@ function enabledQuestionTypes(settings: StudySettings): QuestionType[] {
   const types: QuestionType[] = [];
   if (settings.questionTypeMultipleChoice) types.push('mc');
   if (settings.questionTypeWritten) types.push('written');
+  if (settings.questionTypeFlashcards) types.push('flashcard');
   if (types.length === 0) types.push('mc');
   return types;
 }
@@ -131,11 +132,22 @@ function buildRoundQuestions(
         correctAnswer,
         options: opts,
       });
-    } else {
+    } else if (type === 'written') {
       list.push({
         key,
         cardId,
         type: 'written',
+        direction,
+        questionText,
+        imageUrl: card.imageUrl,
+        correctAnswer,
+      });
+    } else {
+      // type === 'flashcard'
+      list.push({
+        key,
+        cardId,
+        type: 'flashcard',
         direction,
         questionText,
         imageUrl: card.imageUrl,
@@ -164,7 +176,7 @@ function mergeSettings(s: any): StudySettings {
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { id, filterState } = useLocalSearchParams();
+  const { id, filterState, newLimit, reviewLimit } = useLocalSearchParams();
   const deckId = id as string;
   const filterStateParam = filterState as string | undefined;
   const isFilteredMode = !!filterStateParam;
@@ -193,10 +205,34 @@ export default function QuizScreen() {
     incorrectText: isDark ? '#f87171' : '#b91c1c',
   };
 
+  const ratingThemeStyles = {
+    again: {
+      bg: isDark ? '#3f1d1d' : '#fef2f2',
+      border: isDark ? '#7f1d1d' : '#fca5a5',
+      text: isDark ? '#f87171' : '#b91c1c',
+    },
+    hard: {
+      bg: isDark ? '#3c2317' : '#fffbeb',
+      border: isDark ? '#78350f' : '#fde68a',
+      text: isDark ? '#fbbf24' : '#b45309',
+    },
+    good: {
+      bg: isDark ? '#064e3b' : '#f0fdf4',
+      border: isDark ? '#10b981' : '#86efac',
+      text: isDark ? '#34d399' : '#047857',
+    },
+    easy: {
+      bg: isDark ? '#1e3a8a' : '#eff6ff',
+      border: isDark ? '#3b82f6' : '#93c5fd',
+      text: isDark ? '#60a5fa' : '#1d4ed8',
+    },
+  };
+
   // ─── Core state ───────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(true);
   const [emptyMessage, setEmptyMessage] = useState('Không có thẻ nào để học lúc này!');
+  const [plusAccessRequired, setPlusAccessRequired] = useState(false);
   const [settings, setSettings] = useState<StudySettings>(defaultStudySettings);
   const sessionIdRef = useRef<string | null>(null);
   // Stable refs for data used inside async callbacks
@@ -236,6 +272,11 @@ export default function QuizScreen() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [cardStartTime, setCardStartTime] = useState(Date.now());
 
+  // Flashcard specific states
+  const [isFlipped, setIsFlipped] = useState(false);
+  const flipAnim = useRef(new Animated.Value(0)).current;
+  const pan = useRef(new Animated.ValueXY()).current;
+
   const writtenInputRef = useRef<TextInput>(null);
   // Drives the "Không biết" collapse animation: 1 = visible, 0 = hidden
   const dontKnowAnim = useRef(new Animated.Value(1)).current;
@@ -256,6 +297,9 @@ export default function QuizScreen() {
     setIsAnswered(false);
     setIsCorrect(false);
     setCardStartTime(Date.now());
+    setIsFlipped(false);
+    flipAnim.setValue(0);
+    pan.setValue({ x: 0, y: 0 });
   }
 
   async function playSound(type: 'correct' | 'end') {
@@ -275,6 +319,7 @@ export default function QuizScreen() {
 
   const initSession = useCallback(async () => {
     setLoading(true);
+    setPlusAccessRequired(false);
     setEmptyMessage('Không có thẻ nào để học lúc này!');
     setCurrentBatch([]);
     setPendingPool([]);
@@ -320,7 +365,9 @@ export default function QuizScreen() {
         if (loadedSettings.shuffleTerms) filtered = shuffleArray(filtered);
         cardIds = filtered.map((c: any) => c.cardId);
       } else {
-        const sessionRes = await startStudySession(deckId, 999, 999);
+        const parsedNewLimit = newLimit ? parseInt(newLimit as string, 10) : 999;
+        const parsedReviewLimit = reviewLimit ? parseInt(reviewLimit as string, 10) : 999;
+        const sessionRes = await startStudySession(deckId, parsedNewLimit, parsedReviewLimit);
         sessionIdRef.current = sessionRes.session?.sessionId ?? null;
         const rawCards = sessionRes.session?.cards ?? [];
         const shuffled = loadedSettings.shuffleTerms
@@ -346,9 +393,11 @@ export default function QuizScreen() {
       setCurrentBatch(buildRoundQuestions(firstBatchKeys, map, cards, loadedSettings, cardAppearancesRef.current));
       setPendingPool(remaining);
     } catch (err) {
-      console.error('Quiz init error:', err);
       if (isPlusAccessError(err)) {
+        setPlusAccessRequired(true);
         setEmptyMessage(PLUS_REQUIRED_MESSAGE);
+      } else {
+        console.error('Quiz init error:', err);
       }
     } finally {
       setLoading(false);
@@ -381,18 +430,21 @@ export default function QuizScreen() {
   const currentQuestion = currentBatch[batchIndex];
   const isMC = currentQuestion?.type === 'mc';
   const isWritten = currentQuestion?.type === 'written';
+  const isFlashcard = currentQuestion?.type === 'flashcard';
   const isRetypeMode = isAnswered && !isCorrect && isWritten && settings.requireRetypingCorrectAnswer;
   const retypeMatches =
     retypeInput.trim().toLowerCase() === currentQuestion?.correctAnswer.trim().toLowerCase();
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
-  const submitReview = async (correct: boolean) => {
+  const submitReview = async (correct: boolean, customRating?: number) => {
     if (isFilteredMode || !sessionIdRef.current || !currentQuestion) return;
     if (submittedCardsRef.current.has(currentQuestion.cardId)) return;
     submittedCardsRef.current.add(currentQuestion.cardId);
     const durationMs = Date.now() - cardStartTime;
-    const rating = !correct ? 1 : durationMs < 3000 ? 4 : durationMs < 8000 ? 3 : 2;
+    const rating = customRating !== undefined
+      ? customRating
+      : (!correct ? 1 : durationMs < 3000 ? 4 : durationMs < 8000 ? 3 : 2);
     try { await reviewCard(sessionIdRef.current, currentQuestion.cardId, rating, durationMs); } catch { }
   };
 
@@ -414,6 +466,144 @@ export default function QuizScreen() {
   const advanceToNextRef = useRef(advanceToNext);
   advanceToNextRef.current = advanceToNext;
 
+  // ─── Flashcard Gestures and Actions ──────────────────────────────────────────
+
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+  const rotate = pan.x.interpolate({
+    inputRange: [-200, 0, 200],
+    outputRange: ['-10deg', '0deg', '10deg'],
+  });
+
+  const panStyle = {
+    transform: [
+      { translateX: pan.x },
+      { translateY: pan.y },
+      { rotate: rotate }
+    ]
+  };
+
+  const frontInterpolate = flipAnim.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['0deg', '180deg']
+  });
+
+  const backInterpolate = flipAnim.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['180deg', '360deg']
+  });
+
+  const frontAnimatedStyle = { transform: [{ rotateY: frontInterpolate }] };
+  const backAnimatedStyle = { transform: [{ rotateY: backInterpolate }] };
+
+  const handleCardFlip = () => {
+    Animated.timing(flipAnim, {
+      toValue: isFlipped ? 0 : 180,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setIsFlipped(!isFlipped));
+  };
+
+  const processFlashcardRating = async (rating: number) => {
+    const correct = rating === 3 || rating === 4;
+    
+    if (correct) {
+      setRoundCorrect(prev => prev + 1);
+      setCorrectTotal(prev => prev + 1);
+      playSound('correct');
+    } else {
+      setWrongInRound(prev => [...prev, currentQuestion.key]);
+      setRoundWrong(prev => prev + 1);
+    }
+    
+    await submitReview(correct, rating);
+
+    // Reset position and states
+    pan.setValue({ x: 0, y: 0 });
+    setIsFlipped(false);
+    flipAnim.setValue(0);
+
+    advanceToNext();
+  };
+
+  const swipeCard = (direction: 'left' | 'right' | 'up' | 'down', rating: number) => {
+    let toX = 0;
+    let toY = 0;
+    if (direction === 'left') toX = -screenWidth * 1.5;
+    else if (direction === 'right') toX = screenWidth * 1.5;
+    else if (direction === 'up') toY = -screenHeight * 1.5;
+    else if (direction === 'down') toY = screenHeight * 1.5;
+
+    Animated.timing(pan, {
+      toValue: { x: toX, y: toY },
+      duration: 250,
+      useNativeDriver: false,
+    }).start(() => {
+      processFlashcardRating(rating);
+    });
+  };
+
+  const resetPosition = () => {
+    Animated.spring(pan, {
+      toValue: { x: 0, y: 0 },
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: (e, gestureState) => {
+        const { dx, dy } = gestureState;
+        
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+          handleCardFlip();
+          return;
+        }
+
+        if (!isFlipped) {
+          handleCardFlip();
+          return;
+        }
+
+        const threshold = 100;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx > threshold) {
+            swipeCard('right', 3); // Good (3)
+          } else if (dx < -threshold) {
+            swipeCard('left', 1); // Again (1)
+          } else {
+            resetPosition();
+          }
+        } else {
+          if (dy > threshold) {
+            swipeCard('down', 2); // Hard (2)
+          } else if (dy < -threshold) {
+            swipeCard('up', 4); // Easy (4)
+          } else {
+            resetPosition();
+          }
+        }
+      }
+    })
+  ).current;
+
+  const triggerFlashcardRating = (rating: number) => {
+    let direction: 'left' | 'right' | 'up' | 'down' = 'right';
+    if (rating === 1) direction = 'left';
+    else if (rating === 2) direction = 'down';
+    else if (rating === 3) direction = 'right';
+    else if (rating === 4) direction = 'up';
+    swipeCard(direction, rating);
+  };
+
   // Keep refs for keyboard-listener so it never reads stale closure values.
   const isAnsweredRef = useRef(isAnswered);
   isAnsweredRef.current = isAnswered;
@@ -424,8 +614,6 @@ export default function QuizScreen() {
   const retypeMatchesRef = useRef(retypeMatches);
   retypeMatchesRef.current = retypeMatches;
   const showWrittenInputBarRef = useRef(false);
-  // (will be set below after showWrittenInputBar is computed – but we also
-  //  compute it inline here so the ref is always up-to-date for the listener)
   showWrittenInputBarRef.current = currentQuestion?.type === 'written' && !isAnswered;
 
   const isMCRef = useRef(isMC);
@@ -434,10 +622,36 @@ export default function QuizScreen() {
   optionsCountRef.current = currentQuestion?.options?.length ?? 0;
   const handleSelectMCRef = useRef<(index: number) => void>(() => {});
 
+  const isFlashcardRef = useRef(false);
+  isFlashcardRef.current = currentQuestion?.type === 'flashcard';
+  const isFlippedRef = useRef(isFlipped);
+  isFlippedRef.current = isFlipped;
+  const handleFlashcardRatingRef = useRef<(rating: number) => void>(() => {});
+  handleFlashcardRatingRef.current = triggerFlashcardRating;
+  const handleCardFlipRef = useRef<() => void>(() => {});
+  handleCardFlipRef.current = handleCardFlip;
+
   // Allow pressing Enter to advance after answering, and 1–4 to pick MC options (web only).
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ── Flashcard shortcuts ──
+      if (isFlashcardRef.current) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          if (!isFlippedRef.current) {
+            handleCardFlipRef.current();
+          }
+          return;
+        }
+        if (isFlippedRef.current && ['1', '2', '3', '4'].includes(e.key)) {
+          const rating = parseInt(e.key, 10);
+          handleFlashcardRatingRef.current(rating);
+          return;
+        }
+        return;
+      }
+
       // ── MC shortcuts: keys 1–4 ──
       if (['1', '2', '3', '4'].includes(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
@@ -452,12 +666,6 @@ export default function QuizScreen() {
       // Don't intercept Enter when the written input bar is active (it submits the answer).
       if (showWrittenInputBarRef.current) return;
       if (!isAnsweredRef.current) return;
-
-      // Retype mode: only advance when the retype input matches.
-      if (isRetypeModeRef.current) {
-        if (retypeMatchesRef.current) advanceToNextRef.current();
-        return;
-      }
 
       // Correct or wrong (non-retype): advance immediately.
       advanceToNextRef.current();
@@ -554,6 +762,19 @@ export default function QuizScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={theme.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (plusAccessRequired) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 18, color: theme.text, marginBottom: 16, textAlign: 'center' }}>
+          {PLUS_REQUIRED_MESSAGE}
+        </Text>
+        <TouchableOpacity style={styles.actionButton} onPress={() => router.back()}>
+          <Text style={styles.actionButtonText}>Quay lại</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -723,29 +944,165 @@ export default function QuizScreen() {
           <View style={[styles.badge, {
             backgroundColor: isMC
               ? (isDark ? '#1e1b4b' : '#eef2ff')
-              : (isDark ? '#2e1065' : '#fdf4ff'),
+              : isWritten
+                ? (isDark ? '#2e1065' : '#fdf4ff')
+                : (isDark ? '#064e3b' : '#ecfdf5'),
           }]}>
-            <Text style={[styles.badgeText, { color: isMC ? theme.primary : '#9333ea' }]}>
-              {isMC ? 'Trắc nghiệm' : 'Tự luận'}
+            <Text style={[styles.badgeText, { color: isMC ? theme.primary : isWritten ? '#9333ea' : '#10b981' }]}>
+              {isMC ? 'Trắc nghiệm' : isWritten ? 'Tự luận' : 'Thẻ ghi nhớ'}
             </Text>
           </View>
 
-          {/* Question */}
-          <View style={styles.questionBlock}>
-            <Text style={[styles.questionLabel, { color: theme.textMuted }]}>
-              {currentQuestion.direction === 'front-to-back' ? langFrontLabel : langBackLabel}
-            </Text>
-            {currentQuestion.imageUrl ? (
-              <Image
-                source={{ uri: currentQuestion.imageUrl }}
-                style={styles.questionImage}
-                resizeMode="contain"
-              />
-            ) : null}
-            <Text style={[styles.questionText, { color: theme.text }]}>
-              {currentQuestion.questionText}
-            </Text>
-          </View>
+          {/* Question / Card */}
+          {!isFlashcard ? (
+            <View style={styles.questionBlock}>
+              <Text style={[styles.questionLabel, { color: theme.textMuted }]}>
+                {currentQuestion.direction === 'front-to-back' ? langFrontLabel : langBackLabel}
+              </Text>
+              {currentQuestion.imageUrl ? (
+                <Image
+                  source={{ uri: currentQuestion.imageUrl }}
+                  style={styles.questionImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+              <Text style={[styles.questionText, { color: theme.text }]}>
+                {currentQuestion.questionText}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.flashcardOuterContainer}>
+              <Animated.View
+                style={[
+                  styles.flashcardSwipeWrapper,
+                  panStyle,
+                ]}
+                {...panResponder.panHandlers}
+              >
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={handleCardFlip}
+                  style={styles.flashcardTouchWrapper}
+                >
+                  {/* Front Side */}
+                  <Animated.View
+                    style={[
+                      styles.flashcardSide,
+                      styles.flashcardFront,
+                      frontAnimatedStyle,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                        shadowColor: isDark ? 'transparent' : '#000',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.flashcardLangLabel, { color: theme.textMuted, top: 20 }]}>
+                      {currentQuestion.direction === 'front-to-back' ? langFrontLabel : langBackLabel}
+                    </Text>
+                    {currentQuestion.imageUrl ? (
+                      <Image
+                        source={{ uri: currentQuestion.imageUrl }}
+                        style={styles.flashcardImage}
+                        resizeMode="contain"
+                      />
+                    ) : null}
+                    <Text style={[styles.flashcardContentText, { color: theme.text }]}>
+                      {currentQuestion.questionText}
+                    </Text>
+                    <Text style={[styles.flashcardHintText, { color: theme.textMuted, bottom: 20 }]}>
+                      Chạm để xem định nghĩa
+                    </Text>
+                  </Animated.View>
+
+                  {/* Back Side */}
+                  <Animated.View
+                    style={[
+                      styles.flashcardSide,
+                      styles.flashcardBack,
+                      backAnimatedStyle,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                        shadowColor: isDark ? 'transparent' : '#000',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.flashcardLangLabel, { color: theme.textMuted, top: 20 }]}>
+                      {currentQuestion.direction === 'front-to-back' ? langBackLabel : langFrontLabel}
+                    </Text>
+                    <Text style={[styles.flashcardContentText, { color: theme.text }]}>
+                      {currentQuestion.correctAnswer}
+                    </Text>
+                    <Text style={[styles.flashcardHintText, { color: theme.textMuted, bottom: 20 }]}>
+                      Vuốt sang Trái: Again · Vuốt Dưới: Hard{'\n'}Vuốt Phải: Good · Vuốt Trên: Easy
+                    </Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              </Animated.View>
+
+              {/* Display ratings at the bottom of the card if it's flipped */}
+              {isFlipped && (
+                <View style={styles.ratingButtonsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.ratingButton,
+                      {
+                        backgroundColor: ratingThemeStyles.again.bg,
+                        borderColor: ratingThemeStyles.again.border,
+                      },
+                    ]}
+                    onPress={() => triggerFlashcardRating(1)}
+                  >
+                    <Text style={[styles.ratingButtonLabel, { color: ratingThemeStyles.again.text }]}>Again (1)</Text>
+                    <Text style={[styles.ratingButtonDesc, { color: ratingThemeStyles.again.text }]}>Vuốt Trái</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.ratingButton,
+                      {
+                        backgroundColor: ratingThemeStyles.hard.bg,
+                        borderColor: ratingThemeStyles.hard.border,
+                      },
+                    ]}
+                    onPress={() => triggerFlashcardRating(2)}
+                  >
+                    <Text style={[styles.ratingButtonLabel, { color: ratingThemeStyles.hard.text }]}>Hard (2)</Text>
+                    <Text style={[styles.ratingButtonDesc, { color: ratingThemeStyles.hard.text }]}>Vuốt Xuống</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.ratingButton,
+                      {
+                        backgroundColor: ratingThemeStyles.good.bg,
+                        borderColor: ratingThemeStyles.good.border,
+                      },
+                    ]}
+                    onPress={() => triggerFlashcardRating(3)}
+                  >
+                    <Text style={[styles.ratingButtonLabel, { color: ratingThemeStyles.good.text }]}>Good (3)</Text>
+                    <Text style={[styles.ratingButtonDesc, { color: ratingThemeStyles.good.text }]}>Vuốt Phải</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.ratingButton,
+                      {
+                        backgroundColor: ratingThemeStyles.easy.bg,
+                        borderColor: ratingThemeStyles.easy.border,
+                      },
+                    ]}
+                    onPress={() => triggerFlashcardRating(4)}
+                  >
+                    <Text style={[styles.ratingButtonLabel, { color: ratingThemeStyles.easy.text }]}>Easy (4)</Text>
+                    <Text style={[styles.ratingButtonDesc, { color: ratingThemeStyles.easy.text }]}>Vuốt Lên</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* ── MC options ── */}
           {isMC && (
@@ -1085,4 +1442,98 @@ const styles = StyleSheet.create({
   },
   retryNoteText: { fontSize: 14, flex: 1 },
   pendingNote: { fontSize: 14, marginTop: 4 },
+  flashcardOuterContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 10,
+  },
+  flashcardSwipeWrapper: {
+    width: '100%',
+    height: 400,
+    maxWidth: 450,
+  },
+  flashcardTouchWrapper: {
+    width: '100%',
+    height: '100%',
+  },
+  flashcardSide: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backfaceVisibility: 'hidden',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 6,
+  },
+  flashcardFront: {
+    zIndex: 2,
+  },
+  flashcardBack: {
+    transform: [{ rotateY: '180deg' }],
+  },
+  flashcardLangLabel: {
+    position: 'absolute',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  flashcardContentText: {
+    fontSize: 28,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 38,
+  },
+  flashcardHintText: {
+    position: 'absolute',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  flashcardImage: {
+    width: '80%',
+    height: '40%',
+    marginBottom: 20,
+    borderRadius: 12,
+  },
+  ratingButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 450,
+    marginTop: 24,
+    gap: 8,
+  },
+  ratingButton: {
+    flex: 1,
+    minWidth: '45%',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  ratingButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  ratingButtonDesc: {
+    fontSize: 11,
+    marginTop: 2,
+    opacity: 0.8,
+  },
 });
