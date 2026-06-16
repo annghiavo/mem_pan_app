@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks, getMySubscription, normalizeSubscription } from '../../services/api';
 import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
@@ -140,19 +140,21 @@ export default function HomeWebScreen() {
         fetchData();
     }, [fetchData]);
 
-    React.useEffect(() => {
-        fetchData();
-        getCurrentUser().then(data => {
-            const u = data.user || data.data || data;
-            if (u?.username) setUsername(u.username);
-            if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
-        }).catch(() => { });
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+            getCurrentUser().then(data => {
+                const u = data.user || data.data || data;
+                if (u?.username) setUsername(u.username);
+                if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
+            }).catch(() => { });
 
-        getMySubscription(true).then(subRes => {
-            const sub = normalizeSubscription(subRes);
-            setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
-        }).catch(() => { });
-    }, [fetchData]);
+            getMySubscription(true).then(subRes => {
+                const sub = normalizeSubscription(subRes);
+                setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+            }).catch(() => { });
+        }, [fetchData])
+    );
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -187,6 +189,33 @@ export default function HomeWebScreen() {
                             <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm học phần, thư mục...</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* Plus Register Banner */}
+                    {!hasPlus && (
+                        <HoverableCard
+                            theme={theme}
+                            style={[styles.plusBanner, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                            onPress={() => router.push('/(profile)/plus' as any)}
+                        >
+                            <View style={styles.plusBannerLeft}>
+                                <View style={styles.plusBannerIconContainer}>
+                                    <Ionicons name="sparkles" size={24} color="#f59e0b" />
+                                </View>
+                                <View style={styles.plusBannerTextContainer}>
+                                    <Text style={[styles.plusBannerTitle, { color: theme.text }]}>
+                                        Đăng ký MemPan <Text style={{ color: '#f59e0b', fontWeight: 'bold' }}>Plus</Text>
+                                    </Text>
+                                    <Text style={[styles.plusBannerSubtitle, { color: theme.textMuted }]}>
+                                        Chỉ 25.000 ₫/tháng • Mở khóa toàn bộ học phần chất lượng cao từ các Creator hàng đầu. Học không giới hạn!
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.plusBannerButton}>
+                                <Text style={styles.plusBannerButtonText}>Đăng ký ngay</Text>
+                                <Ionicons name="chevron-forward" size={18} color="#ffffff" />
+                            </View>
+                        </HoverableCard>
+                    )}
 
                     {/* Được học nhiều nhất - Top public decks by learners */}
                     {topDecks.length > 0 && (
@@ -462,5 +491,57 @@ const styles = StyleSheet.create({
     },
     recentSubtitle: {
         fontSize: 14,
+    },
+    plusBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 24,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 40,
+        // @ts-ignore
+        boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+    },
+    plusBannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 24,
+    },
+    plusBannerIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    plusBannerTextContainer: {
+        flex: 1,
+    },
+    plusBannerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    plusBannerSubtitle: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    plusBannerButton: {
+        backgroundColor: '#f59e0b',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 24,
+        gap: 6,
+    },
+    plusBannerButtonText: {
+        color: '#ffffff',
+        fontSize: 15,
+        fontWeight: 'bold',
     },
 } as any);
