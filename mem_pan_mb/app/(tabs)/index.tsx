@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks, getMySubscription, normalizeSubscription } from '../../services/api';
 import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
@@ -128,24 +128,22 @@ export default function HomeScreen() {
     fetchData();
   }, [fetchData]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-      const fetchUser = async () => {
-        try {
-          const data = await getCurrentUser();
-          const u = data.user || data.data || data;
-          if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
-          if (u?.username) setUsername(u.username);
+  useEffect(() => {
+    fetchData();
+    const fetchUser = async () => {
+      try {
+        const data = await getCurrentUser();
+        const u = data.user || data.data || data;
+        if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
+        if (u?.username) setUsername(u.username);
 
-          const subRes = await getMySubscription(true).catch(() => null);
-          const sub = normalizeSubscription(subRes);
-          setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
-        } catch (e) { }
-      };
-      fetchUser();
-    }, [fetchData])
-  );
+        const subRes = await getMySubscription(true).catch(() => null);
+        const sub = normalizeSubscription(subRes);
+        setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+      } catch (e) { }
+    };
+    fetchUser();
+  }, [fetchData]);
 
 
 

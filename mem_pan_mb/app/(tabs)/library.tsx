@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, useColorScheme, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { getDecks, getFolders, getAllLibraryDecks } from '../../services/api';
 import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
@@ -55,12 +55,10 @@ export default function LibraryScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      fetchData();
-    }, [activeTab])
-  );
+  useEffect(() => {
+    setLoading(true);
+    fetchData();
+  }, [activeTab]);
 
   const onRefresh = () => {
     setRefreshing(true);
