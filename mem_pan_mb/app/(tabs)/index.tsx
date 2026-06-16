@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, useColorScheme, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { getRecentDecks, getDeck, getDeckProgress, getCurrentUser, getDecks, getTopPublicDecks, getMySubscription, normalizeSubscription } from '../../services/api';
 import { PlusDeckBadge, isPlusDeck } from '../../components/ui/PlusDeckBadge';
 
@@ -128,22 +128,24 @@ export default function HomeScreen() {
     fetchData();
   }, [fetchData]);
 
-  React.useEffect(() => {
-    fetchData();
-    const fetchUser = async () => {
-      try {
-        const data = await getCurrentUser();
-        const u = data.user || data.data || data;
-        if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
-        if (u?.username) setUsername(u.username);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+      const fetchUser = async () => {
+        try {
+          const data = await getCurrentUser();
+          const u = data.user || data.data || data;
+          if (u?.avatarUrl) setAvatarUrl(u.avatarUrl);
+          if (u?.username) setUsername(u.username);
 
-        const subRes = await getMySubscription(true).catch(() => null);
-        const sub = normalizeSubscription(subRes);
-        setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
-      } catch (e) { }
-    };
-    fetchUser();
-  }, [fetchData]);
+          const subRes = await getMySubscription(true).catch(() => null);
+          const sub = normalizeSubscription(subRes);
+          setHasPlus(Boolean(sub?.active || sub?.status === 'active'));
+        } catch (e) { }
+      };
+      fetchUser();
+    }, [fetchData])
+  );
 
 
 
@@ -185,6 +187,33 @@ export default function HomeScreen() {
             <Text style={[styles.searchInput, { color: theme.textMuted }]}>Tìm kiếm</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Plus Register Banner */}
+        {!hasPlus && (
+          <TouchableOpacity 
+            style={[styles.plusBanner, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: isDark ? 'transparent' : '#000' }]} 
+            onPress={() => router.push('/(profile)/plus' as any)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.plusBannerLeft}>
+              <View style={styles.plusBannerIconContainer}>
+                <Ionicons name="sparkles" size={20} color="#f59e0b" />
+              </View>
+              <View style={styles.plusBannerTextContainer}>
+                <Text style={[styles.plusBannerTitle, { color: theme.text }]}>
+                  Đăng ký MemPan <Text style={{ color: '#f59e0b', fontWeight: 'bold' }}>Plus</Text>
+                </Text>
+                <Text style={[styles.plusBannerSubtitle, { color: theme.textMuted }]}>
+                  Chỉ 25k/tháng • Học không giới hạn
+                </Text>
+              </View>
+            </View>
+            <View style={styles.plusBannerButton}>
+              <Text style={styles.plusBannerButtonText}>Đăng ký</Text>
+              <Ionicons name="chevron-forward" size={14} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Được học nhiều nhất - Top public decks by learners (2-row grid) */}
         {topDecks.length > 0 ? (
@@ -468,5 +497,58 @@ const styles = StyleSheet.create({
   },
   recentSubtitle: {
     fontSize: 14,
+  },
+  plusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  plusBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  plusBannerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  plusBannerTextContainer: {
+    flex: 1,
+  },
+  plusBannerTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  plusBannerSubtitle: {
+    fontSize: 13,
+  },
+  plusBannerButton: {
+    backgroundColor: '#f59e0b',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 4,
+  },
+  plusBannerButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

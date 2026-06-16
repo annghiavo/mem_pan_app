@@ -78,6 +78,8 @@ export default function App() {
                   <EmailTemplatesPage />
                 </AdminRoute>
               </PrivateRoute>
+            }
+          />
           <Route
             path="/moderators"
             element={

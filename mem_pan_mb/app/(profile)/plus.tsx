@@ -192,7 +192,7 @@ export default function PlusScreen() {
                                 )}
                                 <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                                     <Text style={[styles.planName, { color: theme.text }]}>Gói 1 Tháng</Text>
-                                    <Text style={[styles.planPrice, { color: theme.plusGold }]}>49.000 ₫</Text>
+                                    <Text style={[styles.planPrice, { color: theme.plusGold }]}>25.000 ₫</Text>
                                     <TouchableOpacity 
                                         style={[styles.buyButton, { backgroundColor: theme.plusGold }]} 
                                         onPress={() => handleSubscribe('plus_monthly')}

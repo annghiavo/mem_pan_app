@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DollarSign, Download, CheckCircle, Clock } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 
 const MOCK_REVENUE_DATA = [
   { month: "Jan 2026", gross: 50000000, platform: 25000000, creatorPool: 25000000 },
@@ -18,7 +18,7 @@ const MOCK_PAYOUTS = [
   { id: "4", creatorName: "Pham Thi D", bank: "VPBank", account: "1234567890", amount: 35000000, status: "paid", learners: 3500 },
 ];
 
-const COLORS = ["#5865F2", "#10B981", "#F59E0B", "#EF4444"];
+
 
 export default function RevenuePage() {
   const [payouts, setPayouts] = useState(MOCK_PAYOUTS);
@@ -72,7 +72,7 @@ export default function RevenuePage() {
             <BarChart data={MOCK_REVENUE_DATA} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
               <XAxis dataKey="month" stroke="var(--text-muted)" />
-              <YAxis stroke="var(--text-muted)" tickFormatter={(val) => \`\${val / 1000000}M\`} />
+              <YAxis stroke="var(--text-muted)" tickFormatter={(val: number) => `${val / 1000000}M`} />
               <RechartsTooltip 
                 formatter={(value: number) => formatVND(value)}
                 contentStyle={{ backgroundColor: "var(--bg-surface)", borderColor: "var(--border-color)", borderRadius: "8px" }}
