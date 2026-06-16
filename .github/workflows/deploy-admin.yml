@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - add_billing_service
     paths:
       - 'mem_pan_admin/admin-web/**'
       - '.github/workflows/deploy-admin.yml'
@@ -17,6 +18,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install Dependencies
+        run: npm install
+        working-directory: ./mem_pan_admin/admin-web
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
