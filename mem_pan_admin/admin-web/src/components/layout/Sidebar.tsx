@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Flag, Users, Layers, LogOut, Mail, ShieldCheck, ShieldAlert, DollarSign } from "lucide-react";
+import { Flag, Users, Layers, LogOut, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 
@@ -15,7 +15,6 @@ const LINKS: NavLink[] = [
   { to: "/appeals", icon: ShieldAlert, label: "Appeals" },
   { to: "/users", icon: Users, label: "Users" },
   { to: "/decks", icon: Layers, label: "Decks" },
-  { to: "/revenue", icon: DollarSign, label: "Revenue & Payouts", adminOnly: true },
   { to: "/email-templates", icon: Mail, label: "Email Templates", adminOnly: true },
   { to: "/moderators", icon: ShieldCheck, label: "Moderators", adminOnly: true },
 ];
@@ -100,8 +99,8 @@ export default function Sidebar() {
                 gap: "0.875rem",
                 padding: "0.75rem 1rem",
                 borderRadius: "var(--radius-md)",
-                color: isActive ? "white" : "var(--text-muted)",
-                background: isActive ? "linear-gradient(90deg, rgba(255,255,255,0.08), transparent)" : "transparent",
+                color: isActive ? "var(--text-main)" : "var(--text-muted)",
+                background: isActive ? "linear-gradient(90deg, var(--bg-surface-hover), transparent)" : "transparent",
                 borderLeft: isActive ? "3px solid var(--accent-primary)" : "3px solid transparent",
                 fontWeight: isActive ? 600 : 500,
                 fontSize: "0.95rem",

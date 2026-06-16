@@ -12,7 +12,6 @@ import EmailTemplatesPage from "./pages/EmailTemplatesPage";
 import ModeratorsPage from "./pages/ModeratorsPage";
 import AppealsPage from "./pages/AppealsPage";
 import AppealPage from "./pages/AppealPage";
-import RevenuePage from "./pages/RevenuePage";
 
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
@@ -90,16 +89,7 @@ export default function App() {
               </PrivateRoute>
             }
           />
-          <Route
-            path="/revenue"
-            element={
-              <PrivateRoute>
-                <AdminRoute>
-                  <RevenuePage />
-                </AdminRoute>
-              </PrivateRoute>
-            }
-          />
+
 
           <Route path="*" element={<Navigate to="/reports" replace />} />
         </Routes>
