@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getMySubscription, checkoutPlus, normalizeCheckoutUrl, normalizeSubscription, confirmPayment } from '../../services/api';
 import { WebContainer } from '../../components/ui/WebContainer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+//oke redeploy 
 const getBillingCallbackUrls = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
         const origin = window.location.origin;
@@ -193,8 +193,8 @@ export default function PlusScreen() {
                                 <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                                     <Text style={[styles.planName, { color: theme.text }]}>Gói 1 Tháng</Text>
                                     <Text style={[styles.planPrice, { color: theme.plusGold }]}>25.000 ₫</Text>
-                                    <TouchableOpacity 
-                                        style={[styles.buyButton, { backgroundColor: theme.plusGold }]} 
+                                    <TouchableOpacity
+                                        style={[styles.buyButton, { backgroundColor: theme.plusGold }]}
                                         onPress={() => handleSubscribe('plus_monthly')}
                                         disabled={checkoutLoading}
                                     >
