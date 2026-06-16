@@ -258,3 +258,52 @@ td {
 tr:hover td {
   background: rgba(255,255,255,0.02);
 }
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-base: hsl(var(--primary-hue), 25%, 96%);
+    --bg-surface: rgba(255, 255, 255, 0.65);
+    --bg-surface-hover: rgba(255, 255, 255, 0.85);
+    --border-color: hsla(var(--primary-hue), 20%, 30%, 0.12);
+    
+    --text-main: hsl(var(--primary-hue), 40%, 12%);
+    --text-muted: hsl(var(--primary-hue), 20%, 45%);
+    
+    --accent-primary: hsl(var(--primary-hue), 75%, 52%);
+    --accent-primary-hover: hsl(var(--primary-hue), 80%, 45%);
+    --accent-glow: hsla(var(--primary-hue), 75%, 52%, 0.15);
+    
+    --accent-danger: hsl(340, 85%, 48%);
+    --accent-danger-glow: hsla(340, 85%, 48%, 0.15);
+    
+    --accent-success: hsl(150, 75%, 32%);
+    --accent-warning: hsl(35, 95%, 42%);
+
+    --shadow-sm: 0 2px 8px rgba(26, 21, 36, 0.04);
+    --shadow-md: 0 8px 20px rgba(26, 21, 36, 0.06);
+    --shadow-lg: 0 16px 36px rgba(26, 21, 36, 0.1);
+  }
+
+  body {
+    background-image: 
+      radial-gradient(circle at 15% 50%, hsla(var(--primary-hue), 40%, 80%, 0.2), transparent 25%),
+      radial-gradient(circle at 85% 30%, hsla(220, 40%, 85%, 0.2), transparent 25%);
+  }
+
+  input, select, textarea {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid hsla(var(--primary-hue), 20%, 30%, 0.15);
+  }
+
+  input:focus, select:focus, textarea:focus {
+    background: rgba(255, 255, 255, 1);
+  }
+
+  tr:hover td {
+    background: hsla(var(--primary-hue), 20%, 30%, 0.02);
+  }
+
+  td {
+    border-bottom: 1px solid hsla(var(--primary-hue), 20%, 30%, 0.05);
+  }
+}
